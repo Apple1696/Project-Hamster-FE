@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
 import { cn } from "cn";
+import { toast } from "react-toastify";
 
 import {
   Accordion,
@@ -10,6 +13,19 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -25,6 +41,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { supabase } from "@/lib/supabase";
 
 interface MenuItem {
   title: string;
@@ -146,6 +163,65 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
     ...defaultProps,
     ...props,
   };
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        setUser(session?.user ?? null);
+        setIsAuthLoading(false);
+      }
+    });
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        if (isMounted) {
+          setUser(data.session?.user ?? null);
+          setIsAuthLoading(false);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setIsAuthLoading(false);
+        }
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Unable to check your authentication status.",
+        );
+      });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Signed out successfully.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to sign out right now.",
+      );
+    }
+  }
 
   return (
     <section className={cn("py-4", className)}>
@@ -170,8 +246,14 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
             </NavigationMenuList>
           </NavigationMenu>
           <div className="flex gap-2 justify-self-end">
-            <Button variant="outline" size="sm" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
-            <Button size="sm" render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+            {isAuthLoading ? null : user ? (
+              <AvatarDropdown user={user} onLogout={handleLogout} />
+            ) : (
+              <>
+                <Button variant="outline" size="sm" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
+                <Button size="sm" render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+              </>
+            )}
           </div>
         </nav>
 
@@ -204,8 +286,14 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
                   </Accordion>
 
                   <div className="flex flex-col gap-3">
-                    <Button variant="outline" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
-                    <Button render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+                    {isAuthLoading ? null : user ? (
+                      <AvatarDropdown user={user} onLogout={handleLogout} />
+                    ) : (
+                      <>
+                        <Button variant="outline" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
+                        <Button render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </SheetContent>
@@ -216,6 +304,64 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
     </section>
   );
 };
+
+function AvatarDropdown({
+  user,
+  onLogout,
+}: {
+  user: User;
+  onLogout: () => void;
+}) {
+  const fullName = getMetadataString(user.user_metadata.full_name);
+  const avatarUrl = getMetadataString(user.user_metadata.avatar_url);
+  const fallback = (fullName || user.email || "User")
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            aria-label="Open account menu"
+          >
+            <Avatar>
+              <AvatarImage
+                src={avatarUrl || undefined}
+                alt={fullName || user.email || "Account avatar"}
+              />
+              <AvatarFallback>{fallback}</AvatarFallback>
+            </Avatar>
+          </Button>
+        }
+      />
+      <DropdownMenuContent className="w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuItem>Profile</DropdownMenuItem>
+          <DropdownMenuItem>Billing</DropdownMenuItem>
+          <DropdownMenuItem>Settings</DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onClick={onLogout}>
+            Log out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function getMetadataString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
 
 const renderMenuItem = (item: MenuItem) => {
   if (item.items) {
