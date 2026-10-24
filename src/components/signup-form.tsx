@@ -1,4 +1,7 @@
 import { cn } from "cn"
+import { type FormEvent, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { toast } from "react-toastify"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -15,11 +18,62 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { supabase } from "@/lib/supabase"
 
 export function SignupForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const navigate = useNavigate()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+    const fullName = String(formData.get("fullName") ?? "").trim()
+    const email = String(formData.get("email") ?? "").trim()
+    const password = String(formData.get("password") ?? "")
+    const confirmPassword = String(formData.get("confirmPassword") ?? "")
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match.")
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: "customer",
+          },
+          emailRedirectTo: `${window.location.origin}/verify-email`,
+        },
+      })
+
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+
+      toast.success("Account created. Check your email to verify it.")
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to create your account right now.",
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -32,15 +86,17 @@ export function SignupForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form>
+          <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="name">Full Name</FieldLabel>
                 <Input
                   id="name"
+                  name="fullName"
                   type="text"
                   placeholder="John Doe"
                   className="text-sm"
+                  autoComplete="name"
                   required
                 />
               </Field>
@@ -48,9 +104,11 @@ export function SignupForm({
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="m@example.com"
                   className="text-sm"
+                  autoComplete="email"
                   required
                 />
               </Field>
@@ -60,8 +118,11 @@ export function SignupForm({
                     <FieldLabel htmlFor="password">Password</FieldLabel>
                     <Input
                       id="password"
+                      name="password"
                       type="password"
                       className="text-sm"
+                      autoComplete="new-password"
+                      minLength={8}
                       required
                     />
                   </Field>
@@ -71,8 +132,11 @@ export function SignupForm({
                     </FieldLabel>
                     <Input
                       id="confirm-password"
+                      name="confirmPassword"
                       type="password"
                       className="text-sm"
+                      autoComplete="new-password"
+                      minLength={8}
                       required
                     />
                   </Field>
@@ -82,15 +146,17 @@ export function SignupForm({
                 </FieldDescription>
               </Field>
               <Field>
-                <Button type="submit">Create Account</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Creating account..." : "Create Account"}
+                </Button>
                 <FieldDescription className="text-center text-sm text-muted-foreground">
                   Already have an account?{" "}
-                  <a
-                    href="/login"
+                  <Link
+                    to="/login"
                     className="font-medium text-primary hover:underline"
                   >
                     Sign in
-                  </a>
+                  </Link>
                 </FieldDescription>
               </Field>
             </FieldGroup>
