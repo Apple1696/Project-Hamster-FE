@@ -43,7 +43,15 @@ type FormErrors = Record<string, string>
 const HAMSTER_IMAGE_BUCKET = "hamster-images"
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
-function HamsterCard({ hamster }: { hamster: Hamster }) {
+function HamsterCard({
+  hamster,
+  onView,
+  onEdit,
+}: {
+  hamster: Hamster
+  onView: () => void
+  onEdit: () => void
+}) {
   const [imageFailed, setImageFailed] = useState(false)
 
   return (
@@ -67,43 +75,53 @@ function HamsterCard({ hamster }: { hamster: Hamster }) {
           {hamster.hamster_name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 pb-4 text-sm">
-        <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            Species:
-          </span>
-          <span className="truncate text-foreground">
-            {hamster.species_breed || "Not specified"}
-          </span>
-        </p>
-        <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            Weight:
-          </span>
-          <span className="truncate text-foreground">
-            {hamster.weight_grams == null
-              ? "Not set"
-              : `${hamster.weight_grams} g`}
-          </span>
-        </p>
-        <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            Age:
-          </span>
-          <span className="truncate text-foreground">
-            {hamster.age_months == null
-              ? "Not set"
-              : `${hamster.age_months} months`}
-          </span>
-        </p>
-        <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            Gender:
-          </span>
-          <span className="truncate text-foreground">
-            {hamster.gender || "Not specified"}
-          </span>
-        </p>
+      <CardContent className="space-y-4 pb-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              Species:
+            </span>
+            <span className="truncate text-foreground">
+              {hamster.species_breed || "Not specified"}
+            </span>
+          </p>
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              Weight:
+            </span>
+            <span className="truncate text-foreground">
+              {hamster.weight_grams == null
+                ? "Not set"
+                : `${hamster.weight_grams} g`}
+            </span>
+          </p>
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              Age:
+            </span>
+            <span className="truncate text-foreground">
+              {hamster.age_months == null
+                ? "Not set"
+                : `${hamster.age_months} months`}
+            </span>
+          </p>
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+              Gender:
+            </span>
+            <span className="truncate text-foreground">
+              {hamster.gender || "Not specified"}
+            </span>
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={onView}>
+            View
+          </Button>
+          <Button type="button" className="flex-1" onClick={onEdit}>
+            Edit
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
@@ -116,13 +134,18 @@ const HamsterProfile = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editHamster, setEditHamster] = useState<Hamster | null>(null)
+  const [viewHamster, setViewHamster] = useState<Hamster | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageRemoved, setImageRemoved] = useState(false)
   const imagePreview = useMemo(
     () => (imageFile ? URL.createObjectURL(imageFile) : null),
     [imageFile],
   )
+  const selectedImagePreview =
+    imagePreview ?? (imageRemoved ? null : editHamster?.image_url ?? null)
 
   useEffect(() => {
     return () => {
@@ -142,6 +165,7 @@ const HamsterProfile = () => {
     noClick: true,
     onDropAccepted: ([file]) => {
       setImageFile(file ?? null)
+      setImageRemoved(false)
       clearFieldError("image_file")
     },
     onDropRejected: ([rejection]) => {
@@ -221,8 +245,13 @@ const HamsterProfile = () => {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const isEditing = editHamster !== null
     if (!ownerId) {
-      toast.error("Sign in before adding a hamster profile.")
+      toast.error(
+        isEditing
+          ? "Edit failed"
+          : "Sign in before adding a hamster profile.",
+      )
       return
     }
 
@@ -253,13 +282,16 @@ const HamsterProfile = () => {
     }
 
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
+    if (Object.keys(nextErrors).length > 0) {
+      if (isEditing) toast.error("Edit failed")
+      return
+    }
 
     setIsSubmitting(true)
     let uploadedImagePath: string | null = null
 
     try {
-      let imageUrl: string | null = null
+      let imageUrl = imageRemoved ? null : editHamster?.image_url ?? null
       if (imageFile) {
         const extension = imageFile.name.split(".").pop()?.toLowerCase() || "jpg"
         const imagePath = `${ownerId}/${crypto.randomUUID()}.${extension}`
@@ -278,46 +310,69 @@ const HamsterProfile = () => {
           .getPublicUrl(imagePath).data.publicUrl
       }
 
-      const { data, error } = await supabase
-        .from("hamsters")
-        .insert({
-          owner_id: ownerId,
-          hamster_name: hamsterName,
-          species_breed: speciesBreed || null,
-          weight_grams: weight,
-          age_months: age,
-          gender: gender || null,
-          image_url: imageUrl,
-        })
-        .select(
-          "id, hamster_name, species_breed, weight_grams, age_months, gender, image_url",
+      const values = {
+        hamster_name: hamsterName,
+        species_breed: speciesBreed || null,
+        weight_grams: weight,
+        age_months: age,
+        gender: gender || null,
+        image_url: imageUrl,
+      }
+      const selectedFields =
+        "id, hamster_name, species_breed, weight_grams, age_months, gender, image_url"
+
+      if (editHamster) {
+        const { data, error } = await supabase
+          .from("hamsters")
+          .update(values)
+          .eq("id", editHamster.id)
+          .eq("owner_id", ownerId)
+          .select(selectedFields)
+          .single()
+        if (error) throw error
+
+        setHamsters((currentHamsters) =>
+          currentHamsters.map((hamster) =>
+            hamster.id === data.id ? data : hamster,
+          ),
         )
-        .single()
+      } else {
+        const { data, error } = await supabase
+          .from("hamsters")
+          .insert({ owner_id: ownerId, ...values })
+          .select(selectedFields)
+          .single()
+        if (error) throw error
 
-      if (error) throw error
+        setHamsters((currentHamsters) => [data, ...currentHamsters])
+      }
 
-      setHamsters((currentHamsters) => [data, ...currentHamsters])
       formRef.current?.reset()
       setImageFile(null)
+      setImageRemoved(false)
       setErrors({})
       setIsDialogOpen(false)
-      toast.success("Add success")
+      setEditHamster(null)
+      toast.success(isEditing ? "Edit success" : "Add success")
     } catch (error) {
       if (uploadedImagePath) {
         const { error: cleanupError } = await supabase.storage
           .from(HAMSTER_IMAGE_BUCKET)
           .remove([uploadedImagePath])
         if (cleanupError) {
-          toast.error(
-            `The profile could not be saved, and the uploaded image could not be removed: ${cleanupError.message}`,
-          )
+          console.error("Unable to remove the uploaded hamster image.", cleanupError)
         }
       }
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to add the hamster profile.",
-      )
+      if (isEditing) {
+        console.error("Unable to edit hamster profile.", error)
+        toast.error("Edit failed")
+      } else {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Unable to add the hamster profile.",
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -339,8 +394,10 @@ const HamsterProfile = () => {
           className="shrink-0"
           disabled={!ownerId || isLoading}
           onClick={() => {
+            setEditHamster(null)
             setErrors({})
             setImageFile(null)
+            setImageRemoved(false)
             setIsDialogOpen(true)
           }}
         >
@@ -371,10 +428,98 @@ const HamsterProfile = () => {
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {hamsters.map((hamster) => (
-            <HamsterCard key={hamster.id} hamster={hamster} />
+            <HamsterCard
+              key={hamster.id}
+              hamster={hamster}
+              onView={() => setViewHamster(hamster)}
+              onEdit={() => {
+                setEditHamster(hamster)
+                setErrors({})
+                setImageFile(null)
+                setImageRemoved(false)
+                setIsDialogOpen(true)
+              }}
+            />
           ))}
         </div>
       )}
+
+      <Dialog
+        open={viewHamster !== null}
+        onOpenChange={(open) => {
+          if (!open) setViewHamster(null)
+        }}
+      >
+        <DialogContent className="gap-4 p-4 sm:max-w-md sm:p-5">
+          {viewHamster && (
+            <>
+              <DialogHeader className="gap-1">
+                <DialogTitle className="text-center">
+                  {viewHamster.hamster_name}
+                </DialogTitle>
+                <DialogDescription className="text-center text-xs">
+                  Hamster profile details
+                </DialogDescription>
+              </DialogHeader>
+              {viewHamster.image_url ? (
+                <img
+                  src={viewHamster.image_url}
+                  alt={viewHamster.hamster_name}
+                  className="max-h-56 w-full rounded-lg bg-muted object-cover"
+                />
+              ) : (
+                <div className="flex h-36 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <PawPrint aria-hidden="true" className="size-10 opacity-40" />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-3 text-sm">
+                <p className="min-w-0">
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Name
+                  </span>
+                  <span className="block truncate font-medium">
+                    {viewHamster.hamster_name}
+                  </span>
+                </p>
+                <p className="min-w-0">
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Species / breed
+                  </span>
+                  <span className="block truncate">
+                    {viewHamster.species_breed || "Not specified"}
+                  </span>
+                </p>
+                <p>
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Weight
+                  </span>
+                  <span>
+                    {viewHamster.weight_grams == null
+                      ? "Not set"
+                      : `${viewHamster.weight_grams} g`}
+                  </span>
+                </p>
+                <p>
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Age
+                  </span>
+                  <span>
+                    {viewHamster.age_months == null
+                      ? "Not set"
+                      : `${viewHamster.age_months} months`}
+                  </span>
+                </p>
+                <p>
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    Gender
+                  </span>
+                  <span>{viewHamster.gender || "Not specified"}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isDialogOpen}
@@ -383,18 +528,25 @@ const HamsterProfile = () => {
           if (!open) {
             setErrors({})
             setImageFile(null)
+            setImageRemoved(false)
+            setEditHamster(null)
             formRef.current?.reset()
           }
         }}
       >
         <DialogContent className="gap-3 p-4 sm:max-w-md sm:p-5">
           <DialogHeader className="gap-1">
-            <DialogTitle>Add a hamster</DialogTitle>
+            <DialogTitle>
+              {editHamster ? "Edit hamster" : "Add a hamster"}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              Add the details and an optional photo.
+              {editHamster
+                ? "Update your hamster's details and photo."
+                : "Add the details and an optional photo."}
             </DialogDescription>
           </DialogHeader>
           <form
+            key={editHamster?.id ?? "new-hamster"}
             ref={formRef}
             onSubmit={handleSubmit}
             className="space-y-3"
@@ -408,6 +560,7 @@ const HamsterProfile = () => {
                 <Input
                   id="hamster_name"
                   name="hamster_name"
+                  defaultValue={editHamster?.hamster_name ?? ""}
                   autoComplete="off"
                   aria-invalid={Boolean(errors.hamster_name)}
                   aria-describedby={
@@ -432,7 +585,7 @@ const HamsterProfile = () => {
                   <select
                     id="species_breed"
                     name="species_breed"
-                    defaultValue=""
+                    defaultValue={editHamster?.species_breed ?? ""}
                     className="h-8 w-full appearance-none rounded-lg border border-input bg-transparent px-2.5 py-1 pr-8 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     <option value="">Select a breed</option>
@@ -464,6 +617,7 @@ const HamsterProfile = () => {
                   id="weight_grams"
                   name="weight_grams"
                   type="number"
+                  defaultValue={editHamster?.weight_grams ?? ""}
                   min="0"
                   step="any"
                   inputMode="decimal"
@@ -490,6 +644,7 @@ const HamsterProfile = () => {
                   id="age_months"
                   name="age_months"
                   type="number"
+                  defaultValue={editHamster?.age_months ?? ""}
                   min="0"
                   step="1"
                   inputMode="numeric"
@@ -516,7 +671,7 @@ const HamsterProfile = () => {
                   <select
                     id="gender"
                     name="gender"
-                    defaultValue=""
+                    defaultValue={editHamster?.gender ?? ""}
                     className="h-8 w-full appearance-none rounded-lg border border-input bg-transparent px-2.5 py-1 pr-8 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     <option value="">Select gender</option>
@@ -542,20 +697,22 @@ const HamsterProfile = () => {
                 })}
               >
                 <input {...getInputProps()} />
-                {imageFile && imagePreview ? (
+                {selectedImagePreview ? (
                   <div className="flex w-full items-center gap-3">
                     <img
-                      src={imagePreview}
+                      src={selectedImagePreview}
                       alt="Selected hamster preview"
                       className="size-14 rounded-md object-cover"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
-                        {imageFile.name}
+                        {imageFile?.name ?? "Current hamster photo"}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {(imageFile.size / 1024 / 1024).toFixed(1)} MB
-                      </p>
+                      {imageFile && (
+                        <p className="text-xs text-muted-foreground">
+                          {(imageFile.size / 1024 / 1024).toFixed(1)} MB
+                        </p>
+                      )}
                     </div>
                     <Button
                       type="button"
@@ -565,6 +722,7 @@ const HamsterProfile = () => {
                       onClick={(event) => {
                         event.stopPropagation()
                         setImageFile(null)
+                        setImageRemoved(true)
                       }}
                     >
                       <X aria-hidden="true" />
@@ -617,7 +775,13 @@ const HamsterProfile = () => {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Hamster"}
+                {isSubmitting
+                  ? editHamster
+                    ? "Saving..."
+                    : "Adding..."
+                  : editHamster
+                    ? "Save Changes"
+                    : "Add Hamster"}
               </Button>
             </DialogFooter>
           </form>
