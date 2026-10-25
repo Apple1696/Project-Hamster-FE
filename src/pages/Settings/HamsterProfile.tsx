@@ -11,6 +11,15 @@ import { useDropzone } from "react-dropzone"
 
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Card,
   CardContent,
   CardHeader,
@@ -134,9 +143,11 @@ const HamsterProfile = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editHamster, setEditHamster] = useState<Hamster | null>(null)
   const [viewHamster, setViewHamster] = useState<Hamster | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imageRemoved, setImageRemoved] = useState(false)
@@ -375,6 +386,47 @@ const HamsterProfile = () => {
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleDeleteHamster() {
+    if (!ownerId || !editHamster) {
+      toast.error("Delete failed")
+      return
+    }
+
+    setIsDeleting(true)
+
+    try {
+      const { data, error } = await supabase
+        .from("hamsters")
+        .delete()
+        .eq("id", editHamster.id)
+        .eq("owner_id", ownerId)
+        .select("id")
+        .maybeSingle()
+
+      if (error) throw error
+      if (!data) {
+        throw new Error("Hamster profile was not found or could not be deleted.")
+      }
+
+      setHamsters((currentHamsters) =>
+        currentHamsters.filter((hamster) => hamster.id !== editHamster.id),
+      )
+      setIsDeleteDialogOpen(false)
+      setIsDialogOpen(false)
+      setEditHamster(null)
+      setImageFile(null)
+      setImageRemoved(false)
+      formRef.current?.reset()
+      toast.success("Delete success")
+    } catch (error) {
+      console.error("Unable to delete hamster profile.", error)
+      setIsDeleteDialogOpen(false)
+      toast.error("Delete failed")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -765,28 +817,93 @@ const HamsterProfile = () => {
                 </p>
               )}
             </div>
-            <DialogFooter className="pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => setIsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? editHamster
-                    ? "Saving..."
-                    : "Adding..."
-                  : editHamster
-                    ? "Save Changes"
-                    : "Add Hamster"}
-              </Button>
+            <DialogFooter
+              className={
+                editHamster
+                  ? "flex-row justify-between pt-1"
+                  : "pt-1"
+              }
+            >
+              {editHamster ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting || isDeleting}
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={isSubmitting || isDeleting}
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                    >
+                      Delete
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting || isDeleting}>
+                      {isSubmitting ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Adding..." : "Add Hamster"}
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setIsDeleteDialogOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete hamster profile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete{" "}
+              <span className="font-medium text-foreground">
+                {editHamster?.hamster_name ?? "this hamster"}
+              </span>
+              &apos;s profile. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              render={
+                <Button variant="outline" disabled={isDeleting}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={() => void handleDeleteHamster()}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }
