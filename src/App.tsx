@@ -1,4 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import Settings from "./pages/Settings/Settings";
+import Profile from "./pages/Settings/Profile";
+import HamsterProfile from "./pages/Settings/HamsterProfile";
 import Layout from "./layouts/Layout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -17,25 +20,40 @@ const router = createBrowserRouter([
         index: true,
         element: <Home />,
       },
-    
+
       {
         path: "home",
         element: <Home />,
       },
+      {
+        path: "settings",
+        element: <Settings />,
+        children: [
+          {
+            path: "profile",
+            element: <Profile />,
+          },
+          {
+            path: "hamsterprofile",
+            element: <HamsterProfile />,
+          },
+        ],
+      },
     ],
   },
-    {
-      path: "/login",
-      element: <Login />,
-    },
-    {
-      path: "/signup",
-      element: <Signup />,
-    },
-    {
-      path: "/verify-email",
-      element: <Verify />,
-    },
+  {
+    path: "/login",
+    element: <Login />,
+  },
+  {
+    path: "/signup",
+    element: <Signup />,
+  },
+
+  {
+    path: "/verify-email",
+    element: <Verify />,
+  },
 ]);
 
 function App() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
 import { cn } from "cn";
@@ -344,9 +345,11 @@ function AvatarDropdown({
       />
       <DropdownMenuContent className="w-40">
         <DropdownMenuGroup>
-          <DropdownMenuItem>Profile</DropdownMenuItem>
-          <DropdownMenuItem>Billing</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem>
+            <Link to="/settings">
+              Settings
+            </Link>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
