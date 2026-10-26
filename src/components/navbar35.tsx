@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { Book, Menu, Sunset, Trees, Zap } from "lucide-react";
 import { cn } from "cn";
@@ -91,7 +91,7 @@ const defaultProps: Navbar35Props = {
           title: "Medical Checkup",
           description: "Conduct medical checkups for your hamsters",
           icon: <Book className="size-5 shrink-0" />,
-          url: "#",
+          url: "/medical-checkup",
         },
         {
           title: "More coming soon",
@@ -160,6 +160,7 @@ const defaultProps: Navbar35Props = {
 };
 
 const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
+  const navigate = useNavigate();
   const { logo, menu, auth } = {
     ...defaultProps,
     ...props,
@@ -214,7 +215,8 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
         toast.error(error.message);
         return;
       }
-      toast.success("Signed out successfully.");
+      // toast.success("Signed out successfully.");
+      navigate("/signup");
     } catch (error) {
       toast.error(
         error instanceof Error

@@ -35,21 +35,20 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
-
-type Hamster = {
-  id: string
-  hamster_name: string
-  species_breed: string | null
-  weight_grams: number | null
-  age_months: number | null
-  gender: string | null
-  image_url: string | null
-}
+import {
+  createHamsterProfile,
+  deleteHamsterProfile,
+  getCurrentHamsterOwnerId,
+  getHamsterProfiles,
+  removeUploadedHamsterImage,
+  updateHamsterProfile,
+  uploadHamsterImage,
+  type Hamster,
+  type HamsterProfileValues,
+} from "@/services/HamsterProfileService"
 
 type FormErrors = Record<string, string>
 
-const HAMSTER_IMAGE_BUCKET = "hamster-images"
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 function HamsterCard({
@@ -196,11 +195,7 @@ const HamsterProfile = () => {
 
     async function loadHamsters() {
       try {
-        const { data: sessionData, error: sessionError } =
-          await supabase.auth.getSession()
-        if (sessionError) throw sessionError
-
-        const userId = sessionData.session?.user.id
+        const userId = await getCurrentHamsterOwnerId()
         if (!userId) {
           if (isCurrent) {
             setOwnerId(null)
@@ -209,15 +204,7 @@ const HamsterProfile = () => {
           return
         }
 
-        const { data, error } = await supabase
-          .from("hamsters")
-          .select(
-            "id, hamster_name, species_breed, weight_grams, age_months, gender, image_url",
-          )
-          .eq("owner_id", userId)
-          .order("created_at", { ascending: false })
-
-        if (error) throw error
+        const data = await getHamsterProfiles(userId)
 
         if (isCurrent) {
           setOwnerId(userId)
@@ -304,24 +291,12 @@ const HamsterProfile = () => {
     try {
       let imageUrl = imageRemoved ? null : editHamster?.image_url ?? null
       if (imageFile) {
-        const extension = imageFile.name.split(".").pop()?.toLowerCase() || "jpg"
-        const imagePath = `${ownerId}/${crypto.randomUUID()}.${extension}`
-        const { error: uploadError } = await supabase.storage
-          .from(HAMSTER_IMAGE_BUCKET)
-          .upload(imagePath, imageFile, {
-            contentType: imageFile.type,
-            upsert: false,
-          })
-
-        if (uploadError) throw uploadError
-        uploadedImagePath = imagePath
-
-        imageUrl = supabase.storage
-          .from(HAMSTER_IMAGE_BUCKET)
-          .getPublicUrl(imagePath).data.publicUrl
+        const uploadedImage = await uploadHamsterImage(ownerId, imageFile)
+        uploadedImagePath = uploadedImage.path
+        imageUrl = uploadedImage.url
       }
 
-      const values = {
+      const values: HamsterProfileValues = {
         hamster_name: hamsterName,
         species_breed: speciesBreed || null,
         weight_grams: weight,
@@ -329,18 +304,12 @@ const HamsterProfile = () => {
         gender: gender || null,
         image_url: imageUrl,
       }
-      const selectedFields =
-        "id, hamster_name, species_breed, weight_grams, age_months, gender, image_url"
-
       if (editHamster) {
-        const { data, error } = await supabase
-          .from("hamsters")
-          .update(values)
-          .eq("id", editHamster.id)
-          .eq("owner_id", ownerId)
-          .select(selectedFields)
-          .single()
-        if (error) throw error
+        const data = await updateHamsterProfile(
+          ownerId,
+          editHamster.id,
+          values,
+        )
 
         setHamsters((currentHamsters) =>
           currentHamsters.map((hamster) =>
@@ -348,12 +317,7 @@ const HamsterProfile = () => {
           ),
         )
       } else {
-        const { data, error } = await supabase
-          .from("hamsters")
-          .insert({ owner_id: ownerId, ...values })
-          .select(selectedFields)
-          .single()
-        if (error) throw error
+        const data = await createHamsterProfile(ownerId, values)
 
         setHamsters((currentHamsters) => [data, ...currentHamsters])
       }
@@ -367,10 +331,9 @@ const HamsterProfile = () => {
       toast.success(isEditing ? "Edit success" : "Add success")
     } catch (error) {
       if (uploadedImagePath) {
-        const { error: cleanupError } = await supabase.storage
-          .from(HAMSTER_IMAGE_BUCKET)
-          .remove([uploadedImagePath])
-        if (cleanupError) {
+        try {
+          await removeUploadedHamsterImage(uploadedImagePath)
+        } catch (cleanupError) {
           console.error("Unable to remove the uploaded hamster image.", cleanupError)
         }
       }
@@ -398,18 +361,7 @@ const HamsterProfile = () => {
     setIsDeleting(true)
 
     try {
-      const { data, error } = await supabase
-        .from("hamsters")
-        .delete()
-        .eq("id", editHamster.id)
-        .eq("owner_id", ownerId)
-        .select("id")
-        .maybeSingle()
-
-      if (error) throw error
-      if (!data) {
-        throw new Error("Hamster profile was not found or could not be deleted.")
-      }
+      await deleteHamsterProfile(ownerId, editHamster.id)
 
       setHamsters((currentHamsters) =>
         currentHamsters.filter((hamster) => hamster.id !== editHamster.id),

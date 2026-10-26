@@ -1,0 +1,37 @@
+.medical-steps .ant-steps-item-title {
+  color: var(--foreground) !important;
+}
+
+.medical-steps .ant-steps-item-description {
+  color: var(--muted-foreground) !important;
+}
+
+.medical-steps .ant-steps-item-icon {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+}
+
+.medical-steps .ant-steps-item-icon .ant-steps-icon {
+  color: var(--muted-foreground) !important;
+}
+
+.medical-steps .ant-steps-item-process .ant-steps-item-icon,
+.medical-steps .ant-steps-item-finish .ant-steps-item-icon {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.medical-steps .ant-steps-item-process .ant-steps-icon,
+.medical-steps .ant-steps-item-finish .ant-steps-icon,
+.medical-steps .ant-steps-item-process .ant-steps-item-title::after {
+  color: var(--primary-foreground) !important;
+}
+
+.medical-steps .ant-steps-item-finish .ant-steps-item-title,
+.medical-steps .ant-steps-item-process .ant-steps-item-title {
+  color: var(--foreground) !important;
+}
+
+.medical-steps .ant-steps-item-finish .ant-steps-item-tail::after {
+  background-color: var(--primary) !important;
+}

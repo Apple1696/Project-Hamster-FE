@@ -46,7 +46,7 @@ export function LoginForm({
         return
       }
 
-      toast.success("Signed in successfully.")
+      toast.success("Signed in success.")
       navigate("/home")
     } catch (error) {
       toast.error(
