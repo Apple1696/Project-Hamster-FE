@@ -80,7 +80,7 @@ const sidebarData: SidebarData = {
         {
           label: "History",
           // icon: BarChart3,
-          href: "/settings/history"
+          href: "/settings/medical-history"
         },
       ],
     },

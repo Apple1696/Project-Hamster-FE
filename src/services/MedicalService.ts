@@ -38,12 +38,100 @@ export type AppointmentRequest = {
   reasonForVisit: string;
 };
 
+export type MedicalAppointment = {
+  id: string;
+  hamster_name: string;
+  appointment_date: string;
+  veterinarian_name: string;
+  status: string;
+};
+
 type AvailabilityRow = Omit<AppointmentAvailability, "veterinarian">;
 type ProfileRow = Record<string, unknown> & { id: string };
+type AppointmentRow = {
+  id: string;
+  hamster_id: string;
+  appointment_date: string;
+  status: string;
+  vet_id: string;
+};
+type HamsterNameRow = { id: string; hamster_name: string };
 
 function getProfileString(profile: ProfileRow, field: string): string | null {
   const value = profile[field];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export async function getMedicalHistory(): Promise<MedicalAppointment[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) throw new Error("Sign in to view your medical history.");
+
+  const { data: appointmentRows, error } = await supabase
+    .from("appointments")
+    .select("id, hamster_id, appointment_date, status, vet_id")
+    .eq("owner_id", authData.user.id)
+    .order("appointment_date", { ascending: false });
+
+  if (error) throw error;
+
+  const appointments = (appointmentRows ?? []) as AppointmentRow[];
+  if (appointments.length === 0) return [];
+
+  const hamsterIds = [
+    ...new Set(appointments.map((appointment) => appointment.hamster_id)),
+  ];
+  const vetIds = [...new Set(appointments.map((appointment) => appointment.vet_id))];
+  const [hamsterResult, profileResult] = await Promise.all([
+    supabase
+      .from("hamsters")
+      .select("id, hamster_name")
+      .in("id", hamsterIds),
+    supabase
+      .from("profiles")
+      .select("*")
+      .in("id", vetIds)
+      .ilike("role", "veterinarian"),
+  ]);
+
+  if (hamsterResult.error) throw hamsterResult.error;
+  if (profileResult.error) throw profileResult.error;
+
+  const hamstersById = new Map(
+    ((hamsterResult.data ?? []) as HamsterNameRow[]).map((hamster) => [
+      hamster.id,
+      hamster.hamster_name,
+    ]),
+  );
+  const profilesById = new Map(
+    ((profileResult.data ?? []) as ProfileRow[]).map((profile) => {
+      const firstName =
+        getProfileString(profile, "first_name") ??
+        getProfileString(profile, "firstName");
+      const lastName =
+        getProfileString(profile, "last_name") ??
+        getProfileString(profile, "lastName");
+      const profileName =
+        getProfileString(profile, "full_name") ??
+        getProfileString(profile, "display_name") ??
+        getProfileString(profile, "displayName") ??
+        getProfileString(profile, "name") ??
+        [firstName, lastName].filter(Boolean).join(" ");
+
+      return [
+        profile.id,
+        profileName || getProfileString(profile, "email") || "Veterinarian",
+      ];
+    }),
+  );
+
+  return appointments.map((appointment) => ({
+    id: appointment.id,
+    hamster_name: hamstersById.get(appointment.hamster_id) ?? "Hamster",
+    appointment_date: appointment.appointment_date,
+    veterinarian_name: profilesById.get(appointment.vet_id) ?? "Veterinarian",
+    status: appointment.status,
+  }));
 }
 
 export async function getMedicalBookingData(): Promise<{

@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Medical from "./pages/Medical/Medical";
+import MedicalHistory from "./pages/History/MedicalHistory";
 import Settings from "./pages/Settings/Settings";
 import Profile from "./pages/Settings/Profile";
 import HamsterProfile from "./pages/Settings/HamsterProfile";
@@ -43,6 +44,10 @@ const router = createBrowserRouter([
             path: "hamsterprofile",
             element: <HamsterProfile />,
           },
+          {
+            path: "medical-history",
+            element: <MedicalHistory />,
+          }
         ],
       },
       {
