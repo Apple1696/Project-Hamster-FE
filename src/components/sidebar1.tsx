@@ -1,12 +1,6 @@
-import {
-  BarChart3,
-  ClipboardList,
-  HelpCircle,
-  LayoutDashboard,
-  Settings,
-} from "lucide-react";
 import { cn } from "cn";
 import type { ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 
 import {
   Breadcrumb,
@@ -24,7 +18,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -35,9 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 type NavItem = {
   label: string;
-  // icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   href: string;
-  isActive?: boolean;
 };
 
 type NavGroup = {
@@ -46,23 +37,11 @@ type NavGroup = {
 };
 
 type SidebarData = {
-  logo: {
-    src: string;
-    alt: string;
-    title: string;
-    description: string;
-  };
   navGroups: NavGroup[];
   // footerGroup: NavGroup;
 };
 
 const sidebarData: SidebarData = {
-  logo: {
-    src: "https://cdn.shadcnblocks.com/shadcnblocks/block/logos/shadcnblocks-logo.svg",
-    alt: "Shadcnblocks",
-    title: "Shadcnblocks",
-    description: "Build your app",
-  },
   navGroups: [
     {
       title: "Settings",
@@ -70,7 +49,6 @@ const sidebarData: SidebarData = {
         {
           label: "Profile",
           href: "/settings/profile",
-          isActive: true,
         },
         {
           label: "Hamsters",
@@ -98,31 +76,29 @@ const sidebarData: SidebarData = {
   // },
 };
 
-const SidebarLogo = ({ logo }: { logo: SidebarData["logo"] }) => {
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton size="lg">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-sm bg-primary">
-            <img
-              src={logo.src}
-              alt={logo.alt}
-              className="size-6 text-primary-foreground invert dark:invert-0"
-            />
-          </div>
-          <div className="flex flex-col gap-0.5 leading-none">
-            <span className="font-medium">{logo.title}</span>
-            <span className="text-xs text-muted-foreground">
-              {logo.description}
-            </span>
-          </div>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
-  );
-};
+function isCurrentRoute(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function getCurrentPageLabel(pathname: string): string {
+  const currentItem = sidebarData.navGroups
+    .flatMap((group) => group.items)
+    .find((item) => isCurrentRoute(pathname, item.href));
+
+  if (currentItem) return currentItem.label;
+  if (pathname === "/settings") return "Settings";
+
+  const pageSegment = pathname.split("/").filter(Boolean).at(-1);
+  if (!pageSegment) return "Home";
+
+  return pageSegment
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
 const AppSidebar = ({ className, ...props }: React.ComponentProps<typeof Sidebar>) => {
+  const { pathname } = useLocation();
+
   return (
     <Sidebar
       className={cn("top-16 h-[calc(100svh-4rem)]", className)}
@@ -139,7 +115,12 @@ const AppSidebar = ({ className, ...props }: React.ComponentProps<typeof Sidebar
               <SidebarMenu>
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton isActive={item.isActive} render={<a href={item.href} />}>{item.label}</SidebarMenuButton>
+                    <SidebarMenuButton
+                      isActive={isCurrentRoute(pathname, item.href)}
+                      render={<Link to={item.href} />}
+                    >
+                      {item.label}
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -172,6 +153,9 @@ interface Sidebar1Props {
 }
 
 const Sidebar1 = ({ className, children }: Sidebar1Props) => {
+  const { pathname } = useLocation();
+  const currentPage = getCurrentPageLabel(pathname);
+
   return (
     <SidebarProvider
       className={cn("min-h-[calc(100svh-4rem)]", className)}
@@ -186,12 +170,18 @@ const Sidebar1 = ({ className, children }: Sidebar1Props) => {
           />
           <Breadcrumb>
             <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="#">Settings</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
+              {currentPage !== "Settings" && (
+                <>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink render={<Link to="/settings/profile" />}>
+                      Settings
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                </>
+              )}
               <BreadcrumbItem>
-                <BreadcrumbPage>Dashboard</BreadcrumbPage>
+                <BreadcrumbPage>{currentPage}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

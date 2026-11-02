@@ -1,9 +1,10 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import Medical from "./pages/Medical/Medical";
-import MedicalHistory from "./pages/History/MedicalHistory";
-import Settings from "./pages/Settings/Settings";
-import Profile from "./pages/Settings/Profile";
-import HamsterProfile from "./pages/Settings/HamsterProfile";
+import Medical from "./pages/Customer/Medical/Medical";
+import MedicalHistory from "./pages/Customer/History/MedicalHistory";
+import Settings from "./pages/Customer/Settings/Settings";
+import Profile from "./pages/Customer/Settings/Profile";
+import HamsterProfile from "./pages/Customer/Settings/HamsterProfile";
+import ViewAppointment from "./pages/Veterinarian/ViewAppointment";
 import Layout from "./layouts/Layout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -73,6 +74,12 @@ const router = createBrowserRouter([
     path: "/verify-email",
     element: <Verify />,
   },
+  {
+    path: "/view-schedule",
+    element: (
+        <ViewAppointment />
+    ),
+  }
 ]);
 
 function App() {

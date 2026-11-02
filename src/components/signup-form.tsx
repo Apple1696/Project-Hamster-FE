@@ -18,7 +18,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { supabase } from "@/lib/supabase"
+import { signUpWithEmail } from "@/services/AccountService"
 
 export function SignupForm({
   className,
@@ -44,23 +44,12 @@ export function SignupForm({
     setIsSubmitting(true)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      await signUpWithEmail(
+        fullName,
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: "customer",
-          },
-          emailRedirectTo: `${window.location.origin}/verify-email`,
-        },
-      })
-
-      if (error) {
-        toast.error(error.message)
-        return
-      }
-
+        `${window.location.origin}/verify-email`,
+      )
       toast.success("Account created. Check your email to verify it.")
       navigate(`/verify-email?email=${encodeURIComponent(email)}`)
     } catch (error) {

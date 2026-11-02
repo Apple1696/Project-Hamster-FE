@@ -1,4 +1,4 @@
-import { Sidebar1 } from "../../components/sidebar1";
+import { Sidebar1 } from "@/components/sidebar1";
 import { Outlet } from "react-router-dom";
 
 const Settings = () => {

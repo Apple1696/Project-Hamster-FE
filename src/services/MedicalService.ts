@@ -46,6 +46,21 @@ export type MedicalAppointment = {
   status: string;
 };
 
+export type VeterinarianScheduleAppointment = {
+  id: string;
+  customer_name: string;
+  hamster_name: string;
+  status: string;
+};
+
+export type VeterinarianScheduleSlot = {
+  id: string;
+  availability_id: string | null;
+  start_time: string;
+  end_time: string;
+  appointments: VeterinarianScheduleAppointment[];
+};
+
 type AvailabilityRow = Omit<AppointmentAvailability, "veterinarian">;
 type ProfileRow = Record<string, unknown> & { id: string };
 type AppointmentRow = {
@@ -55,11 +70,160 @@ type AppointmentRow = {
   status: string;
   vet_id: string;
 };
+type ScheduleAppointmentRow = {
+  id: string;
+  hamster_id: string;
+  owner_id: string;
+  appointment_date: string;
+  appointment_end_at: string | null;
+  status: string;
+  availability_id: string | null;
+};
 type HamsterNameRow = { id: string; hamster_name: string };
+
+function getProfileName(profile: ProfileRow): string {
+  const firstName =
+    getProfileString(profile, "first_name") ??
+    getProfileString(profile, "firstName");
+  const lastName =
+    getProfileString(profile, "last_name") ??
+    getProfileString(profile, "lastName");
+  const profileName =
+    getProfileString(profile, "full_name") ??
+    getProfileString(profile, "display_name") ??
+    getProfileString(profile, "displayName") ??
+    getProfileString(profile, "name") ??
+    [firstName, lastName].filter(Boolean).join(" ");
+
+  return profileName || getProfileString(profile, "email") || "Customer";
+}
 
 function getProfileString(profile: ProfileRow, field: string): string | null {
   const value = profile[field];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export async function getVeterinarianSchedule(
+  selectedDate: string,
+): Promise<VeterinarianScheduleSlot[]> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) throw new Error("Sign in to view your schedule.");
+
+  const { data: availabilityData, error: availabilityError } = await supabase
+    .from("vet_availability")
+    .select("id, vet_id, slot_date, start_time, end_time, max_capacity, current_bookings")
+    .eq("vet_id", authData.user.id)
+    .eq("slot_date", selectedDate)
+    .order("start_time");
+
+  if (availabilityError) throw availabilityError;
+
+  const dayStart = new Date(`${selectedDate}T00:00:00`);
+  if (Number.isNaN(dayStart.getTime())) {
+    throw new Error("Select a valid schedule date.");
+  }
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const { data: appointmentData, error: appointmentError } = await supabase
+    .from("appointments")
+    .select(
+      "id, hamster_id, owner_id, appointment_date, appointment_end_at, status, availability_id",
+    )
+    .eq("vet_id", authData.user.id)
+    .gte("appointment_date", dayStart.toISOString())
+    .lt("appointment_date", dayEnd.toISOString())
+    .order("appointment_date");
+
+  if (appointmentError) throw appointmentError;
+
+  const availability = (availabilityData ?? []) as AvailabilityRow[];
+  const appointments = (appointmentData ?? []) as ScheduleAppointmentRow[];
+  const hamsterIds = [...new Set(appointments.map(({ hamster_id }) => hamster_id))];
+  const ownerIds = [...new Set(appointments.map(({ owner_id }) => owner_id))];
+  const [hamsterResult, profileResult] = appointments.length
+    ? await Promise.all([
+        hamsterIds.length
+          ? supabase
+              .from("hamsters")
+              .select("id, hamster_name")
+              .in("id", hamsterIds)
+          : Promise.resolve({ data: [], error: null }),
+        ownerIds.length
+          ? supabase.from("profiles").select("*").in("id", ownerIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+    : [
+        { data: [] as HamsterNameRow[], error: null },
+        { data: [] as ProfileRow[], error: null },
+      ];
+
+  if (hamsterResult.error) throw hamsterResult.error;
+  if (profileResult.error) throw profileResult.error;
+
+  const hamstersById = new Map(
+    ((hamsterResult.data ?? []) as HamsterNameRow[]).map((hamster) => [
+      hamster.id,
+      hamster.hamster_name,
+    ]),
+  );
+  const customersById = new Map(
+    ((profileResult.data ?? []) as ProfileRow[]).map((profile) => [
+      profile.id,
+      getProfileName(profile),
+    ]),
+  );
+  const slots: VeterinarianScheduleSlot[] = availability.map((slot) => ({
+    id: slot.id,
+    availability_id: slot.id,
+    start_time: slot.start_time,
+    end_time: slot.end_time,
+    appointments: [],
+  }));
+
+  const availabilityIds = new Set(availability.map(({ id }) => id));
+  for (const appointment of appointments) {
+    const start = new Date(appointment.appointment_date);
+    const end = appointment.appointment_end_at
+      ? new Date(appointment.appointment_end_at)
+      : new Date(start.getTime() + 60 * 60 * 1000);
+    const startTime = start.toTimeString().slice(0, 8);
+    const endTime = end.toTimeString().slice(0, 8);
+    const slot =
+      (appointment.availability_id &&
+        availabilityIds.has(appointment.availability_id) &&
+        slots.find((item) => item.id === appointment.availability_id)) ||
+      slots.find(
+        (item) =>
+          item.start_time.slice(0, 8) === startTime &&
+          item.end_time.slice(0, 8) === endTime,
+      );
+
+    const appointmentSummary: VeterinarianScheduleAppointment = {
+      id: appointment.id,
+      customer_name: customersById.get(appointment.owner_id) ?? "Customer",
+      hamster_name: hamstersById.get(appointment.hamster_id) ?? "Hamster",
+      status: appointment.status,
+    };
+
+    if (slot) {
+      slot.appointments.push(appointmentSummary);
+      continue;
+    }
+
+    slots.push({
+      id: `appointment-${appointment.id}`,
+      availability_id: null,
+      start_time: startTime,
+      end_time: endTime,
+      appointments: [appointmentSummary],
+    });
+  }
+
+  return slots.sort((left, right) =>
+    left.start_time.localeCompare(right.start_time),
+  );
 }
 
 export async function getMedicalHistory(): Promise<MedicalAppointment[]> {

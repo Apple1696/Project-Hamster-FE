@@ -18,7 +18,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { supabase } from "@/lib/supabase"
+import { signInWithEmail } from "@/services/AccountService"
 
 export function LoginForm({
   className,
@@ -36,18 +36,9 @@ export function LoginForm({
     const password = String(formData.get("password") ?? "")
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        toast.error(error.message)
-        return
-      }
-
+      const role = await signInWithEmail(email, password)
       toast.success("Signed in success.")
-      navigate("/home")
+      navigate(role === "veterinarian" ? "/view-schedule" : "/home")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to sign in right now.",

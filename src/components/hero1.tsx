@@ -41,9 +41,9 @@ const defaultProps: Hero1Props = {
   //   text: "Now in Beta",
   //   announcement: "Check out our latest updates",
   // },
-  heading: "The CRM platform for modern product teams.",
+  heading: "Good health for your hamsters.",
   description:
-    "An open-source project management platform built for modern product teams. Plan, track, and ship with confidence.",
+    "Ensure your hamsters stay healthy with our expert care tips and guidance.",
   buttons: {
     primary: { text: "Get started", url: "#" },
     secondary: { text: "Learn more", url: "#" },

@@ -12,7 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase";
+import {
+  getVerificationSession,
+  resendSignupVerificationEmail,
+} from "@/services/AccountService";
 
 export default function Verify() {
   const [searchParams] = useSearchParams();
@@ -25,14 +28,8 @@ export default function Verify() {
 
     async function checkVerifiedSession() {
       try {
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) {
-          toast.error(error.message);
-          return;
-        }
-
-        if (isMounted && data.session) {
+        const session = await getVerificationSession();
+        if (isMounted && session) {
           toast.success("Email verified successfully.");
           navigate("/home", { replace: true });
         }
@@ -57,19 +54,10 @@ export default function Verify() {
     setIsResending(true);
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
+      await resendSignupVerificationEmail(
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`,
-        },
-      });
-
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-
+        `${window.location.origin}/verify-email`,
+      );
       toast.success("Verification email sent. Check your inbox.");
     } catch (error) {
       toast.error(

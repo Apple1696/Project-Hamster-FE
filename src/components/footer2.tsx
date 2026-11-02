@@ -1,16 +1,5 @@
-import {
-  FaFacebook,
-  FaGithub,
-  FaInstagram,
-  FaLinkedin,
-  FaTwitter,
-} from "react-icons/fa";
+
 import { cn } from "cn";
-import {
-  Logo,
-  LogoImageDesktop,
-  LogoImageMobile,
-} from "@/components/logo";
 
 interface FooterLink {
   name: string;

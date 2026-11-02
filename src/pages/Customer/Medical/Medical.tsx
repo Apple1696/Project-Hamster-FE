@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -114,6 +115,7 @@ function HamsterDetails({ hamster }: { hamster: MedicalHamster }) {
 }
 
 const Medical = () => {
+  const navigate = useNavigate();
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [hamsters, setHamsters] = useState<MedicalHamster[]>([]);
   const [isLoadingHamsters, setIsLoadingHamsters] = useState(true);
@@ -293,12 +295,7 @@ const Medical = () => {
   }
 
   function startAnotherAppointment() {
-    setIsConfirmed(false);
-    setStep(0);
-    setSelectedHamster(null);
-    setSelectedSlot(null);
-    setSelectedVeterinarian(null);
-    setReason("");
+    navigate("/settings/medical-history");
   }
 
   const selectedAppointmentDate = selectedSlot
@@ -359,7 +356,7 @@ const Medical = () => {
               {selectedVeterinarian.veterinarian.name}
             </p>
             <Button onClick={startAnotherAppointment}>
-              Book another appointment
+              View your appointments
             </Button>
           </CardContent>
         </Card>
