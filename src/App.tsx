@@ -1,10 +1,11 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import Medical from "./pages/Customer/Medical/Medical";
 import MedicalHistory from "./pages/Customer/History/MedicalHistory";
 import Settings from "./pages/Customer/Settings/Settings";
 import Profile from "./pages/Customer/Settings/Profile";
 import HamsterProfile from "./pages/Customer/Settings/HamsterProfile";
 import ViewAppointment from "./pages/Veterinarian/ViewAppointment";
+import VetLayout from "./pages/Veterinarian/VetLayout";
 import Layout from "./layouts/Layout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -14,6 +15,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
+import CreateVetAccount from "./pages/Admin/CreateVetAccount";
 
 const router = createBrowserRouter([
   {
@@ -24,7 +26,6 @@ const router = createBrowserRouter([
         index: true,
         element: <Home />,
       },
-
       {
         path: "home",
         element: <Home />,
@@ -48,7 +49,7 @@ const router = createBrowserRouter([
           {
             path: "medical-history",
             element: <MedicalHistory />,
-          }
+          },
         ],
       },
       {
@@ -58,9 +59,35 @@ const router = createBrowserRouter([
             <Medical />
           </ProtectedRoute>
         ),
-      }
+      },
     ],
   },
+  {
+    path: "/veterinarian",
+    element: (
+      <ProtectedRoute requiredRole="veterinarian">
+        <VetLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="view-schedule" replace />,
+      },
+      {
+        path: "view-schedule",
+        element: <ViewAppointment />,
+      },
+    ],
+  },
+  // {
+  //   path: "/view-schedule",
+  //   element: (
+  //     <ProtectedRoute requiredRole="veterinarian">
+  //       <ViewAppointment />
+  //     </ProtectedRoute>
+  //   ),
+  // },
   {
     path: "/login",
     element: <Login />,
@@ -69,17 +96,14 @@ const router = createBrowserRouter([
     path: "/signup",
     element: <Signup />,
   },
-
   {
     path: "/verify-email",
     element: <Verify />,
   },
   {
-    path: "/view-schedule",
-    element: (
-        <ViewAppointment />
-    ),
-  }
+    path: "/create-vet-account",
+    element: <CreateVetAccount />,
+  },
 ]);
 
 function App() {

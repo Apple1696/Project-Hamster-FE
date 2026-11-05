@@ -38,7 +38,7 @@ export function LoginForm({
     try {
       const role = await signInWithEmail(email, password)
       toast.success("Signed in success.")
-      navigate(role === "veterinarian" ? "/view-schedule" : "/home")
+      navigate(role === "veterinarian" ? "/veterinarian/view-schedule" : "/home")
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to sign in right now.",

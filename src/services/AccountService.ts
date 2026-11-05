@@ -54,6 +54,7 @@ export async function signUpWithEmail(
   email: string,
   password: string,
   emailRedirectTo: string,
+  role: AccountRole = "customer",
 ): Promise<void> {
   const { error } = await supabase.auth.signUp({
     email,
@@ -61,13 +62,28 @@ export async function signUpWithEmail(
     options: {
       data: {
         full_name: fullName,
-        role: "customer",
+        role,
       },
       emailRedirectTo,
     },
   });
 
   if (error) throw error;
+}
+
+export async function signUpVeterinarianWithEmail(
+  fullName: string,
+  email: string,
+  password: string,
+  emailRedirectTo: string,
+): Promise<void> {
+  await signUpWithEmail(
+    fullName,
+    email,
+    password,
+    emailRedirectTo,
+    "veterinarian",
+  );
 }
 
 export async function getVerificationSession(): Promise<Session | null> {

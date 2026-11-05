@@ -234,9 +234,8 @@ const ViewAppointment = () => {
                 slots.map((slot) => (
                   <TableRow className="align-top" key={slot.id}>
                     <TableCell className="w-32 whitespace-normal border-r bg-muted/40 px-4 py-6 text-center font-semibold text-foreground sm:w-40">
-                      {formatTime(slot.start_time)}
-                      <span className="block pt-1 text-xs font-normal text-muted-foreground">
-                        to {formatTime(slot.end_time)}
+                      <span className="whitespace-nowrap">
+                        {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-normal px-3 py-3 sm:px-4">
