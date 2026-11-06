@@ -344,6 +344,30 @@ const ViewAppointmentDetail = () => {
                   ))}
                 </div>
               </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  className="w-full sm:w-auto"
+                  type="button"
+                  variant="default"
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase
+                        .from("appointments")
+                        .update({ status: "in_progress" })
+                        .eq("id", appointment.id);
+
+                      if (error) throw error;
+
+                      navigate(`/veterinarian/basic-examination/${appointment.id}`);
+                    } catch (error) {
+                      console.error("Unable to start examination:", error);
+                    }
+                  }}
+                >
+                  Begin Examination
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -227,24 +227,24 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
   }
 
   return (
-    <section className={cn("py-4", className)}>
+    <section className={cn("bg-primary py-4 text-primary-foreground", className)}>
       <div className="container">
-        <nav className="hidden grid-cols-[1fr_auto_1fr] items-center lg:grid">
+        <nav className="hidden grid-cols-[1fr_auto_1fr] items-center rounded-full border border-white/10 bg-primary/95 px-4 py-3 shadow-sm ring-1 ring-white/10 lg:grid">
           <a
             href={logo.url}
-            className="flex items-center gap-2 justify-self-start"
+            className="flex items-center gap-2 justify-self-start text-primary-foreground"
           >
             <img
               src={logo.src}
-              className="max-h-8 dark:invert"
+              className="max-h-8 brightness-0 invert"
               alt={logo.alt}
             />
-            <span className="text-lg font-semibold tracking-tighter">
+            <span className="text-lg font-semibold tracking-tighter text-primary-foreground">
               {logo.title}
             </span>
           </a>
           <NavigationMenu className="justify-self-center">
-            <NavigationMenuList>
+            <NavigationMenuList className="gap-1">
               {menu.map((item) => renderMenuItem(item))}
             </NavigationMenuList>
           </NavigationMenu>
@@ -253,31 +253,46 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
               <AvatarDropdown user={user} onLogout={handleLogout} />
             ) : (
               <>
-                <Button variant="outline" size="sm" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
-                <Button size="sm" render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
+                  render={<a href={auth.login.url} />}
+                  nativeButton={false}
+                >
+                  {auth.login.title}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-background text-foreground hover:bg-background/90"
+                  render={<a href={auth.signup.url} />}
+                  nativeButton={false}
+                >
+                  {auth.signup.title}
+                </Button>
               </>
             )}
           </div>
         </nav>
 
         <div className="block lg:hidden">
-          <div className="flex items-center justify-between">
-            <a href={logo.url} className="flex items-center gap-2">
+          <div className="flex items-center justify-between rounded-full border border-white/10 bg-primary/95 px-3 py-2 shadow-sm ring-1 ring-white/10">
+            <a href={logo.url} className="flex items-center gap-2 text-primary-foreground">
               <img
                 src={logo.src}
-                className="max-h-8 dark:invert"
+                className="max-h-8 brightness-0 invert"
                 alt={logo.alt}
               />
             </a>
             <Sheet>
-              <SheetTrigger render={<Button variant="outline" size="icon" />}><Menu className="size-4" /></SheetTrigger>
-              <SheetContent className="overflow-y-auto">
+              <SheetTrigger render={<Button variant="outline" size="icon" className="border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" />}><Menu className="size-4" /></SheetTrigger>
+              <SheetContent className="overflow-y-auto bg-primary text-primary-foreground">
                 <SheetHeader>
-                  <SheetTitle>
+                  <SheetTitle className="text-primary-foreground">
                     <a href={logo.url} className="flex items-center gap-2">
                       <img
                         src={logo.src}
-                        className="max-h-8 dark:invert"
+                        className="max-h-8 brightness-0 invert"
                         alt={logo.alt}
                       />
                     </a>
@@ -293,8 +308,8 @@ const Navbar35 = ({ className, ...props }: Partial<Navbar35Props>) => {
                       <AvatarDropdown user={user} onLogout={handleLogout} />
                     ) : (
                       <>
-                        <Button variant="outline" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
-                        <Button render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
+                        <Button variant="outline" className="border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground" render={<a href={auth.login.url} />} nativeButton={false}>{auth.login.title}</Button>
+                        <Button className="bg-background text-foreground hover:bg-background/90" render={<a href={auth.signup.url} />} nativeButton={false}>{auth.signup.title}</Button>
                       </>
                     )}
                   </div>
@@ -372,10 +387,12 @@ const renderMenuItem = (item: MenuItem) => {
   if (item.items) {
     return (
       <NavigationMenuItem key={item.title}>
-        <NavigationMenuTrigger>{item.title}</NavigationMenuTrigger>
-        <NavigationMenuContent className="bg-popover text-popover-foreground">
+        <NavigationMenuTrigger className="bg-transparent text-primary-foreground hover:bg-white/10 hover:text-primary-foreground data-[state=open]:bg-white/10 data-[state=open]:text-primary-foreground">
+          {item.title}
+        </NavigationMenuTrigger>
+        <NavigationMenuContent className="border border-white/10 bg-primary text-primary-foreground shadow-lg ring-1 ring-white/10">
           {item.items.map((subItem) => (
-            <NavigationMenuLink key={subItem.title} className="w-80" render={<SubMenuLink item={subItem} />}></NavigationMenuLink>
+            <NavigationMenuLink key={subItem.title} className="w-80 text-primary-foreground" render={<SubMenuLink item={subItem} />}></NavigationMenuLink>
           ))}
         </NavigationMenuContent>
       </NavigationMenuItem>
@@ -386,7 +403,7 @@ const renderMenuItem = (item: MenuItem) => {
     <NavigationMenuItem key={item.title}>
       <NavigationMenuLink
         href={item.url}
-        className="group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-accent-foreground"
+        className="group inline-flex h-10 w-max items-center justify-center rounded-full px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-white/10 hover:text-primary-foreground"
       >
         {item.title}
       </NavigationMenuLink>
@@ -398,10 +415,10 @@ const renderMobileMenuItem = (item: MenuItem) => {
   if (item.items) {
     return (
       <AccordionItem key={item.title} value={item.title} className="border-b-0">
-        <AccordionTrigger className="text-md py-0 font-semibold hover:no-underline">
+        <AccordionTrigger className="text-md py-0 font-semibold text-primary-foreground hover:no-underline">
           {item.title}
         </AccordionTrigger>
-        <AccordionContent className="mt-2">
+        <AccordionContent className="mt-2 text-primary-foreground">
           {item.items.map((subItem) => (
             <SubMenuLink key={subItem.title} item={subItem} />
           ))}
@@ -411,7 +428,7 @@ const renderMobileMenuItem = (item: MenuItem) => {
   }
 
   return (
-    <a key={item.title} href={item.url} className="text-md font-semibold">
+    <a key={item.title} href={item.url} className="text-md font-semibold text-primary-foreground">
       {item.title}
     </a>
   );
@@ -420,14 +437,14 @@ const renderMobileMenuItem = (item: MenuItem) => {
 const SubMenuLink = ({ item }: { item: MenuItem }) => {
   return (
     <a
-      className="flex min-w-80 flex-row gap-4 rounded-md p-3 leading-none no-underline transition-colors outline-none select-none hover:bg-muted hover:text-accent-foreground"
+      className="flex min-w-80 flex-row gap-4 rounded-md p-3 leading-none no-underline text-primary-foreground transition-colors outline-none select-none hover:bg-white/10 hover:text-primary-foreground"
       href={item.url}
     >
-      <div className="text-foreground">{item.icon}</div>
+      <div className="text-primary-foreground">{item.icon}</div>
       <div>
-        <div className="text-sm font-semibold">{item.title}</div>
+        <div className="text-sm font-semibold text-primary-foreground">{item.title}</div>
         {item.description && (
-          <p className="text-sm leading-snug text-muted-foreground">
+          <p className="text-sm leading-snug text-primary-foreground/80">
             {item.description}
           </p>
         )}

@@ -7,6 +7,7 @@ import Profile from "./pages/Customer/Settings/Profile";
 import HamsterProfile from "./pages/Customer/Settings/HamsterProfile";
 import ViewAppointment from "./pages/Veterinarian/ViewAppointment";
 import ViewAppointmentDetail from "./pages/Veterinarian/ViewAppointmentDetail";
+import BasicExamination from "./pages/Veterinarian/BasicExamination";
 import VetLayout from "./pages/Veterinarian/VetLayout";
 import Layout from "./layouts/Layout";
 import Home from "./pages/Home";
@@ -76,7 +77,10 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-    
+      {
+        index: true,
+        element: <Navigate to="view-schedule" replace />,
+      },
       {
         path: "view-schedule",
         element: <ViewAppointment />,
@@ -84,6 +88,10 @@ const router = createBrowserRouter([
       {
         path: "view-schedule/:appointmentId",
         element: <ViewAppointmentDetail />,
+      },
+      {
+        path: "basic-examination/:appointmentId",
+        element: <BasicExamination />,
       },
     ],
   },
