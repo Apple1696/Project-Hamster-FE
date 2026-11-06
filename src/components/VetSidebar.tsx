@@ -1,16 +1,10 @@
+import { LogOut } from "lucide-react";
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
+import { signOut } from "@/services/AccountService";
 import {
   Sidebar,
   SidebarContent,
@@ -80,24 +74,18 @@ function isCurrentRoute(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function getCurrentPageLabel(pathname: string): string {
-  const currentItem = sidebarData.navGroups
-    .flatMap((group) => group.items)
-    .find((item) => isCurrentRoute(pathname, item.href));
-
-  if (currentItem) return currentItem.label;
-  if (pathname === "/settings") return "Settings";
-
-  const pageSegment = pathname.split("/").filter(Boolean).at(-1);
-  if (!pageSegment) return "Home";
-
-  return pageSegment
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
 const AppSidebar = ({ className, ...props }: React.ComponentProps<typeof Sidebar>) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    }
+  };
 
   return (
     <Sidebar
@@ -130,14 +118,20 @@ const AppSidebar = ({ className, ...props }: React.ComponentProps<typeof Sidebar
       </SidebarContent>
       <SidebarFooter>
         <SidebarGroup>
-          {/* <SidebarGroupLabel>{sidebarData.footerGroup.title}</SidebarGroupLabel> */}
+          <Separator className="my-1" />
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* {sidebarData.footerGroup.items.map((item) => (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton render={<a href={item.href} />}>{item.label}</SidebarMenuButton>
-                </SidebarMenuItem>
-              ))} */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  type="button"
+                  variant="outline"
+                  className="justify-start border-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -153,9 +147,6 @@ interface VetSidebarProps {
 }
 
 const VetSidebar = ({ className, children }: VetSidebarProps) => {
-  const { pathname } = useLocation();
-  const currentPage = getCurrentPageLabel(pathname);
-
   return (
     <SidebarProvider
       className={cn("min-h-[calc(100svh-4rem)]", className)}
@@ -168,23 +159,6 @@ const VetSidebar = ({ className, children }: VetSidebarProps) => {
             orientation="vertical"
             className="mr-2 data-[orientation=vertical]:h-4"
           />
-          <Breadcrumb>
-            <BreadcrumbList>
-              {currentPage !== "Settings" && (
-                <>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink render={<Link to="/settings/profile" />}>
-                      Settings
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
-                </>
-              )}
-              <BreadcrumbItem>
-                <BreadcrumbPage>{currentPage}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <div className="min-h-[calc(100svh-8rem)] flex-1 rounded-xl bg-muted/50 p-4 md:min-h-min">

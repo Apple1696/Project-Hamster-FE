@@ -40,7 +40,13 @@ export type AppointmentRequest = {
 
 export type MedicalAppointment = {
   id: string;
+  hamster_id: string;
   hamster_name: string;
+  hamster_image_url?: string | null;
+  species_breed?: string | null;
+  weight_grams?: number | null;
+  age_months?: number | null;
+  gender?: string | null;
   appointment_date: string;
   veterinarian_name: string;
   status: string;
@@ -249,7 +255,9 @@ export async function getMedicalHistory(): Promise<MedicalAppointment[]> {
   const [hamsterResult, profileResult] = await Promise.all([
     supabase
       .from("hamsters")
-      .select("id, hamster_name")
+      .select(
+        "id, hamster_name, species_breed, weight_grams, age_months, gender, image_url",
+      )
       .in("id", hamsterIds),
     supabase
       .from("profiles")
@@ -262,9 +270,9 @@ export async function getMedicalHistory(): Promise<MedicalAppointment[]> {
   if (profileResult.error) throw profileResult.error;
 
   const hamstersById = new Map(
-    ((hamsterResult.data ?? []) as HamsterNameRow[]).map((hamster) => [
+    ((hamsterResult.data ?? []) as MedicalHamster[]).map((hamster) => [
       hamster.id,
-      hamster.hamster_name,
+      hamster,
     ]),
   );
   const profilesById = new Map(
@@ -289,13 +297,23 @@ export async function getMedicalHistory(): Promise<MedicalAppointment[]> {
     }),
   );
 
-  return appointments.map((appointment) => ({
-    id: appointment.id,
-    hamster_name: hamstersById.get(appointment.hamster_id) ?? "Hamster",
-    appointment_date: appointment.appointment_date,
-    veterinarian_name: profilesById.get(appointment.vet_id) ?? "Veterinarian",
-    status: appointment.status,
-  }));
+  return appointments.map((appointment) => {
+    const hamster = hamstersById.get(appointment.hamster_id);
+
+    return {
+      id: appointment.id,
+      hamster_id: appointment.hamster_id,
+      hamster_name: hamster?.hamster_name ?? "Hamster",
+      hamster_image_url: hamster?.image_url ?? null,
+      species_breed: hamster?.species_breed ?? null,
+      weight_grams: hamster?.weight_grams ?? null,
+      age_months: hamster?.age_months ?? null,
+      gender: hamster?.gender ?? null,
+      appointment_date: appointment.appointment_date,
+      veterinarian_name: profilesById.get(appointment.vet_id) ?? "Veterinarian",
+      status: appointment.status,
+    };
+  });
 }
 
 export async function getMedicalBookingData(): Promise<{

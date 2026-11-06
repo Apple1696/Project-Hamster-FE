@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,8 @@ function AppointmentSummary({
 }: {
   appointment: VeterinarianScheduleSlot["appointments"][number];
 }) {
+  const navigate = useNavigate();
+
   return (
     <Card className="min-w-0 shadow-xs">
       <CardContent className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-4">
@@ -78,8 +81,8 @@ function AppointmentSummary({
         </Badge>
         <Button
           className="col-span-2 w-full sm:col-span-1 sm:w-auto"
-          disabled
-          title="Appointment details will be available here"
+          onClick={() => navigate(`/veterinarian/view-schedule/${appointment.id}`)}
+          title="Open appointment details"
           variant="outline"
         >
           View

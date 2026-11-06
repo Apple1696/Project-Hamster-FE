@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronDown, Search, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,10 +43,16 @@ function getStatusClassName(status: string): string {
   return "border-primary/20 bg-primary/10 text-primary";
 }
 
-function AppointmentCard({ appointment }: { appointment: MedicalAppointment }) {
+function AppointmentCard({
+  appointment,
+  onView,
+}: {
+  appointment: MedicalAppointment;
+  onView: (appointmentId: string) => void;
+}) {
   return (
     <Card className="shadow-sm transition-shadow hover:shadow-md">
-      <CardContent className="grid grid-cols-2 items-center gap-x-4 gap-y-5 p-4 sm:grid-cols-4 sm:p-5 xl:grid-cols-[1.15fr_1fr_1.2fr_auto_auto] xl:gap-6">
+      <CardContent className="grid grid-cols-1 items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto_auto] sm:gap-x-5 sm:gap-y-3 sm:p-5">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">Hamster</p>
           <p className="mt-1 truncate text-base font-semibold text-primary">
@@ -73,7 +80,7 @@ function AppointmentCard({ appointment }: { appointment: MedicalAppointment }) {
           </p>
         </div>
 
-        <div className="flex items-center sm:justify-start xl:justify-center">
+        <div className="flex items-center sm:justify-center">
           <Badge
             className={`h-7 max-w-full truncate px-3 ${getStatusClassName(appointment.status)}`}
             variant="outline"
@@ -83,9 +90,9 @@ function AppointmentCard({ appointment }: { appointment: MedicalAppointment }) {
         </div>
 
         <Button
-          className="w-full sm:col-span-1 xl:w-28"
-          disabled
-          title="Appointment details will be available here"
+          className="w-full sm:w-28"
+          onClick={() => onView(appointment.id)}
+          title="View appointment details"
           variant="outline"
         >
           View
@@ -96,6 +103,7 @@ function AppointmentCard({ appointment }: { appointment: MedicalAppointment }) {
 }
 
 const MedicalHistory = () => {
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState<MedicalAppointment[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -218,7 +226,13 @@ const MedicalHistory = () => {
       ) : filteredAppointments.length > 0 ? (
         <div className="grid gap-4">
           {filteredAppointments.map((appointment) => (
-            <AppointmentCard appointment={appointment} key={appointment.id} />
+            <AppointmentCard
+              appointment={appointment}
+              key={appointment.id}
+              onView={(appointmentId) =>
+                navigate(`/settings/medical-history/${appointmentId}`)
+              }
+            />
           ))}
         </div>
       ) : (

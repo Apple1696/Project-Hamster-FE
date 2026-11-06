@@ -92,6 +92,11 @@ export async function getVerificationSession(): Promise<Session | null> {
   return data.session;
 }
 
+export async function signOut(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
 export async function resendSignupVerificationEmail(
   email: string,
   emailRedirectTo: string,

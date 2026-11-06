@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { VetSidebar } from "@/components/ui/VetSidebar";
+import { VetSidebar } from "@/components/VetSidebar";
 
 const VetLayout = () => {
   return (
