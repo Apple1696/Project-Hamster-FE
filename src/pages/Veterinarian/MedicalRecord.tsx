@@ -14,27 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/lib/supabase";
-
-type ExaminationForm = {
-  weight: string;
-  temperature: string;
-  heartRate: string;
-  physicalExaminationNotes: string;
-  symptoms: string;
-  diagnosis: string;
-  treatment: string;
-};
-
-type AppointmentSummary = {
-  id: string;
-  hamster_id: string;
-  hamster_name: string;
-  species_breed: string | null;
-  image_url: string | null;
-  customer_name: string;
-  appointment_date: string;
-};
+import {
+  getBasicExaminationData,
+  saveBasicExamination,
+  type BasicExaminationAppointment,
+  type BasicExaminationForm,
+} from "@/services/MedicalRecordService";
 
 function formatAppointmentDate(value: string): string {
   const hasTime = /T\d{2}:\d{2}/.test(value);
@@ -48,7 +33,7 @@ function formatAppointmentDate(value: string): string {
   }).format(date);
 }
 
-const emptyForm: ExaminationForm = {
+const emptyForm: BasicExaminationForm = {
   weight: "",
   temperature: "",
   heartRate: "",
@@ -61,8 +46,9 @@ const emptyForm: ExaminationForm = {
 const BasicExamination = () => {
   const navigate = useNavigate();
   const { appointmentId } = useParams();
-  const [appointment, setAppointment] = useState<AppointmentSummary | null>(null);
-  const [form, setForm] = useState<ExaminationForm>(emptyForm);
+  const [appointment, setAppointment] =
+    useState<BasicExaminationAppointment | null>(null);
+  const [form, setForm] = useState<BasicExaminationForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,83 +66,12 @@ const BasicExamination = () => {
       }
 
       try {
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
-        if (!authData.user) {
-          throw new Error("Sign in to begin an examination.");
-        }
-
-        const { data: appointmentRow, error: appointmentError } = await supabase
-          .from("appointments")
-          .select("id, owner_id, hamster_id, vet_id, appointment_date")
-          .eq("id", appointmentId)
-          .maybeSingle();
-
-        if (appointmentError) throw appointmentError;
-        if (!appointmentRow) {
-          throw new Error("Appointment not found.");
-        }
-
-        const [hamsterResult, ownerResult, existingRecordResult] = await Promise.all([
-          supabase
-            .from("hamsters")
-            .select("id, hamster_name, species_breed, image_url")
-            .eq("id", appointmentRow.hamster_id)
-            .maybeSingle(),
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", appointmentRow.owner_id)
-            .maybeSingle(),
-          supabase
-            .from("medical_records")
-            .select("*")
-            .eq("appointment_id", appointmentId)
-            .maybeSingle(),
-        ]);
-
-        if (hamsterResult.error) throw hamsterResult.error;
-        if (ownerResult.error) throw ownerResult.error;
-        if (existingRecordResult.error) throw existingRecordResult.error;
-
-        const hamster = hamsterResult.data;
-        const ownerProfile = ownerResult.data;
-        const existingRecord = existingRecordResult.data;
-
-        const ownerName =
-          (ownerProfile && typeof ownerProfile.full_name === "string" && ownerProfile.full_name.trim()) ||
-          (ownerProfile && typeof ownerProfile.name === "string" && ownerProfile.name.trim()) ||
-          "Customer";
+        const examinationData = await getBasicExaminationData(appointmentId);
 
         if (!isCurrent) return;
 
-        setAppointment({
-          id: appointmentRow.id,
-          hamster_id: appointmentRow.hamster_id,
-          hamster_name: hamster?.hamster_name ?? "Hamster",
-          species_breed: hamster?.species_breed ?? null,
-          image_url: hamster?.image_url ?? null,
-          customer_name: ownerName,
-          appointment_date: appointmentRow.appointment_date,
-        });
-
-        if (existingRecord) {
-          setForm({
-            weight: existingRecord.weight == null ? "" : String(existingRecord.weight),
-            temperature: existingRecord.temperature == null ? "" : String(existingRecord.temperature),
-            heartRate: existingRecord.heart_rate == null ? "" : String(existingRecord.heart_rate),
-            physicalExaminationNotes:
-              existingRecord.physical_examination_notes ?? "",
-            symptoms:
-              Array.isArray(existingRecord.confirmed_symptoms)
-                ? existingRecord.confirmed_symptoms.join(", ")
-                : typeof existingRecord.confirmed_symptoms === "string"
-                  ? existingRecord.confirmed_symptoms
-                  : "",
-            diagnosis: existingRecord.confirmed_diagnosis ?? "",
-            treatment: existingRecord.suggested_treatment ?? "",
-          });
-        }
+        setAppointment(examinationData.appointment);
+        setForm(examinationData.form);
       } catch (error) {
         console.error("Unable to load basic examination data:", error);
         if (isCurrent) {
@@ -188,7 +103,7 @@ const BasicExamination = () => {
     ];
   }, [appointment]);
 
-  function updateField(field: keyof ExaminationForm, value: string) {
+  function updateField(field: keyof BasicExaminationForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -203,52 +118,7 @@ const BasicExamination = () => {
     setIsSubmitting(true);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Sign in to save this examination.");
-
-      const parsedSymptoms = form.symptoms
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-      const record = {
-        appointment_id: appointmentId,
-        hamster_id: appointment.hamster_id,
-        vet_id: authData.user.id,
-        weight: form.weight === "" ? null : Number(form.weight),
-        temperature: form.temperature === "" ? null : Number(form.temperature),
-        heart_rate: form.heartRate === "" ? null : Number(form.heartRate),
-        physical_examination_notes:
-          form.physicalExaminationNotes.trim() || null,
-        confirmed_symptoms: parsedSymptoms.length > 0 ? parsedSymptoms : null,
-        confirmed_diagnosis: form.diagnosis.trim() || null,
-        suggested_treatment: form.treatment.trim() || null,
-        status: "pending_review",
-      };
-
-      const { data: existingRecord, error: existingError } = await supabase
-        .from("medical_records")
-        .select("id")
-        .eq("appointment_id", appointmentId)
-        .maybeSingle();
-
-      if (existingError) throw existingError;
-
-      if (existingRecord) {
-        const { error } = await supabase
-          .from("medical_records")
-          .update(record)
-          .eq("id", existingRecord.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("medical_records")
-          .insert(record);
-
-        if (error) throw error;
-      }
+      await saveBasicExamination(appointmentId, appointment.hamster_id, form);
 
       toast.success("Examination saved successfully.");
       navigate("/veterinarian/view-schedule");

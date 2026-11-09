@@ -7,7 +7,7 @@ import Profile from "./pages/Customer/Settings/Profile";
 import HamsterProfile from "./pages/Customer/Settings/HamsterProfile";
 import ViewAppointment from "./pages/Veterinarian/ViewAppointment";
 import ViewAppointmentDetail from "./pages/Veterinarian/ViewAppointmentDetail";
-import BasicExamination from "./pages/Veterinarian/BasicExamination";
+import BasicExamination from "./pages/Veterinarian/MedicalRecord";
 import VetLayout from "./pages/Veterinarian/VetLayout";
 import Layout from "./layouts/Layout";
 import Home from "./pages/Home";
