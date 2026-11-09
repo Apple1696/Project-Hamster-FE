@@ -23,6 +23,7 @@ export type BasicExaminationAppointment = {
 export type BasicExaminationData = {
   appointment: BasicExaminationAppointment;
   form: BasicExaminationForm;
+  medicalRecordId: string | null;
 };
 
 export async function getBasicExaminationData(
@@ -83,6 +84,7 @@ export async function getBasicExaminationData(
       customer_name: customerName,
       appointment_date: appointmentRow.appointment_date,
     },
+    medicalRecordId: existingRecord?.id ?? null,
     form: {
       weight:
         existingRecord?.weight == null ? "" : String(existingRecord.weight),
@@ -111,7 +113,7 @@ export async function saveBasicExamination(
   appointmentId: string,
   hamsterId: string,
   form: BasicExaminationForm,
-): Promise<void> {
+): Promise<string> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
   if (!authData.user) throw new Error("Sign in to save this examination.");
@@ -152,9 +154,38 @@ export async function saveBasicExamination(
       .eq("id", existingRecord.id);
 
     if (error) throw error;
-    return;
+    return existingRecord.id;
   }
 
-  const { error } = await supabase.from("medical_records").insert(record);
+  const { data: insertedRecord, error } = await supabase
+    .from("medical_records")
+    .insert(record)
+    .select("id")
+    .single();
+
   if (error) throw error;
+  return insertedRecord.id;
+}
+
+export async function completeAppointment(
+  appointmentId: string,
+): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) throw new Error("Sign in to complete this appointment.");
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ status: "completed" })
+    .eq("id", appointmentId)
+    .eq("vet_id", authData.user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error(
+      "The appointment status was not updated. Confirm that you are the assigned veterinarian and that you have permission to update it.",
+    );
+  }
 }
