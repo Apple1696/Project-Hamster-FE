@@ -8,6 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-toastify";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,7 @@ const ViewAppointmentDetail = () => {
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStartingExamination, setIsStartingExamination] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -238,6 +240,44 @@ const ViewAppointmentDetail = () => {
     ];
   }, [appointment]);
 
+  async function handleBeginExamination() {
+    if (!appointment) return;
+
+    setIsStartingExamination(true);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Sign in to begin this examination.");
+
+      const { data: updatedAppointment, error } = await supabase
+        .from("appointments")
+        .update({ status: "in_progress" })
+        .eq("id", appointment.id)
+        .eq("vet_id", authData.user.id)
+        .select("id, status")
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!updatedAppointment) {
+        throw new Error(
+          "The appointment status was not updated. Confirm that you are the assigned veterinarian and that your appointment update policy allows this change.",
+        );
+      }
+
+      navigate(`/veterinarian/basic-examination/${appointment.id}`);
+    } catch (error) {
+      console.error("Unable to start examination:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the appointment status.",
+      );
+    } finally {
+      setIsStartingExamination(false);
+    }
+  }
+
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-6 flex items-center justify-between gap-4 rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
@@ -348,24 +388,12 @@ const ViewAppointmentDetail = () => {
               <div className="flex justify-end pt-1">
                 <Button
                   className="w-full sm:w-auto"
+                  disabled={isStartingExamination}
                   type="button"
                   variant="default"
-                  onClick={async () => {
-                    try {
-                      const { error } = await supabase
-                        .from("appointments")
-                        .update({ status: "in_progress" })
-                        .eq("id", appointment.id);
-
-                      if (error) throw error;
-
-                      navigate(`/veterinarian/basic-examination/${appointment.id}`);
-                    } catch (error) {
-                      console.error("Unable to start examination:", error);
-                    }
-                  }}
+                  onClick={handleBeginExamination}
                 >
-                  Begin Examination
+                  {isStartingExamination ? "Starting..." : "Begin Examination"}
                 </Button>
               </div>
             </div>

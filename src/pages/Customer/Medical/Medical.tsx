@@ -362,21 +362,52 @@ const Medical = () => {
         </Card>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>
-              {step === 0
-                ? "Choose a hamster"
-                : step === 1
-                  ? "Choose a time and veterinarian"
-                  : "Review your appointment"}
-            </CardTitle>
-            <CardDescription>
-              {step === 0
-                ? "Select which hamster will be seen."
-                : step === 1
-                  ? "Select an open weekday time slot, then choose a veterinarian."
-                  : "Check the details before confirming your visit."}
-            </CardDescription>
+          <CardHeader
+            className={
+              step === 1
+                ? "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                : undefined
+            }
+          >
+            <div>
+              <CardTitle>
+                {step === 0
+                  ? "Choose a hamster"
+                  : step === 1
+                    ? "Choose a time and veterinarian"
+                    : "Review your appointment"}
+              </CardTitle>
+              <CardDescription>
+                {step === 0
+                  ? "Select which hamster will be seen."
+                  : step === 1
+                    ? "Select an open weekday time slot, then choose a veterinarian."
+                    : "Check the details before confirming your visit."}
+              </CardDescription>
+            </div>
+
+            {step === 1 && (
+              <div className="flex gap-2 self-start sm:self-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Previous week"
+                  onClick={() => changeWeek(-7)}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Next week"
+                  onClick={() => changeWeek(7)}
+                >
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
             {/*
@@ -469,42 +500,6 @@ const Medical = () => {
             */}
             {step === 1 && (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium">
-                      Week of{" "}
-                      {weekStart.toLocaleDateString(undefined, {
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Green slots have availability. Choose one to see the
-                      veterinarians.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Previous week"
-                      onClick={() => changeWeek(-7)}
-                    >
-                      <ChevronLeft aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Next week"
-                      onClick={() => changeWeek(7)}
-                    >
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-
                 {availabilityError && (
                   <p className="text-sm text-destructive" role="alert">
                     {availabilityError}

@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, HeartPulse, NotebookPen, PawPrint } from "lucide-react";
+import { ArrowLeft, HeartPulse, PawPrint } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -360,13 +366,17 @@ const BasicExamination = () => {
             </Card>
 
             <Card className="border-border/80 bg-card shadow-sm">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
-                  <NotebookPen aria-hidden="true" className="size-5 text-primary" />
-                  Clinical Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
+              <Accordion defaultValue={["basic-examination"]}>
+                <AccordionItem className="border-0" value="basic-examination">
+                  <div className="px-6 py-2">
+                    <AccordionTrigger className="items-center p-0 text-lg font-semibold leading-none hover:no-underline">
+                      <span className="flex items-center gap-2 leading-normal">
+                        Basic Examination
+                      </span>
+                    </AccordionTrigger>
+                  </div>
+                  <AccordionContent className="px-6">
+                    <div className="space-y-5 pb-6">
                 <div className="space-y-2">
                   <Label htmlFor="symptoms">Confirmed symptoms</Label>
                   <Textarea
@@ -410,7 +420,10 @@ const BasicExamination = () => {
                     value={form.treatment}
                   />
                 </div>
-              </CardContent>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </Card>
 
             <div className="flex justify-end">
