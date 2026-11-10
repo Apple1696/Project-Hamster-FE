@@ -363,7 +363,7 @@ function AvatarDropdown({
       <DropdownMenuContent className="w-40">
         <DropdownMenuGroup>
           <DropdownMenuItem>
-            <Link to="/settings">
+            <Link to="/settings/profile">
               Settings
             </Link>
           </DropdownMenuItem>
