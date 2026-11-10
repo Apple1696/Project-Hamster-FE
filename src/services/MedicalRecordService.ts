@@ -1,4 +1,9 @@
 import { supabase } from "@/lib/supabase";
+import {
+  getFecalExaminationImageUrls,
+  getFecalExaminationsByMedicalRecordTestId,
+  type FecalExamination,
+} from "@/services/FecalExaminationService";
 
 export type BasicExaminationForm = {
   weight: string;
@@ -25,6 +30,56 @@ export type BasicExaminationData = {
   form: BasicExaminationForm;
   medicalRecordId: string | null;
 };
+
+export type MedicalResults = {
+  basicExamination: {
+    weight: number | null;
+    temperature: number | null;
+    heart_rate: number | null;
+    physical_examination_notes: string | null;
+    confirmed_symptoms: unknown;
+    confirmed_diagnosis: string | null;
+    suggested_treatment: string | null;
+  } | null;
+  fecalExaminations: Array<{
+    record: FecalExamination;
+    imageUrls: Array<{ path: string; url: string }>;
+  }>;
+};
+
+export async function getMedicalResults(
+  appointmentId: string,
+): Promise<MedicalResults> {
+  const { data: medicalRecord, error: medicalRecordError } = await supabase
+    .from("medical_records")
+    .select(
+      "id, weight, temperature, heart_rate, physical_examination_notes, confirmed_symptoms, confirmed_diagnosis, suggested_treatment",
+    )
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  if (medicalRecordError) throw medicalRecordError;
+  if (!medicalRecord) {
+    return { basicExamination: null, fecalExaminations: [] };
+  }
+
+  const fecalRecords = await getFecalExaminationsByMedicalRecordTestId(
+    medicalRecord.id,
+  );
+  const fecalExaminations = await Promise.all(
+    fecalRecords.map(async (record) => ({
+      record,
+      imageUrls: await getFecalExaminationImageUrls(
+        (record.fecal_images ?? []).slice(0, 4),
+      ),
+    })),
+  );
+
+  return {
+    basicExamination: medicalRecord,
+    fecalExaminations,
+  };
+}
 
 export async function getBasicExaminationData(
   appointmentId: string,
