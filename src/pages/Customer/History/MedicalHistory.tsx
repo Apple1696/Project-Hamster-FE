@@ -194,7 +194,7 @@ const MedicalHistory = () => {
             onChange={(event) => setSelectedStatus(event.target.value)}
             value={selectedStatus}
           >
-            <option value="all">All statuses</option>
+            <option value="all">All </option>
             {statuses.map((status) => (
               <option key={status} value={status}>
                 {formatStatus(status)}

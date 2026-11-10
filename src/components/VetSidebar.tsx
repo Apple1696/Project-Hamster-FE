@@ -38,7 +38,7 @@ type SidebarData = {
 const sidebarData: SidebarData = {
   navGroups: [
     {
-      title: "Veterinarian Home",
+      title: "Dashboard",
       items: [
         {
           label: "View-Schedule",
