@@ -86,6 +86,35 @@ export async function signUpVeterinarianWithEmail(
   );
 }
 
+export async function updateUserName(fullName: string): Promise<void> {
+  const { data, error } = await supabase.auth.updateUser({
+    data: { full_name: fullName },
+  });
+
+  if (error) throw error;
+  if (!data.user) {
+    throw new Error("Unable to determine the signed-in account.");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName })
+    .eq("id", data.user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  if (!profile) {
+    throw new Error("Your profile could not be updated.");
+  }
+}
+
+export async function updateUserPassword(password: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) throw error;
+}
+
 export async function getVerificationSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
