@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, HeartPulse, PawPrint, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  AudioLines,
+  HeartPulse,
+  PawPrint,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -11,6 +18,14 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +44,12 @@ import {
   saveFecalExamination,
   type FecalExaminationForm,
 } from "@/services/FecalExaminationService";
+import {
+  getMedicalRecordAudioFiles,
+  isSupportedAudioFile,
+  uploadMedicalRecordAudio,
+  type UploadedMedicalRecordAudio,
+} from "@/services/MedicalRecordMediaService";
 
 function formatAppointmentDate(value: string): string {
   const hasTime = /T\d{2}:\d{2}/.test(value);
@@ -90,6 +111,7 @@ const BasicExamination = () => {
   const { appointmentId } = useParams();
   const [appointment, setAppointment] =
     useState<BasicExaminationAppointment | null>(null);
+  const [medicalRecordId, setMedicalRecordId] = useState<string | null>(null);
   const [form, setForm] = useState<BasicExaminationForm>(emptyForm);
   const [fecalForm, setFecalForm] =
     useState<FecalExaminationForm>(emptyFecalForm);
@@ -101,6 +123,15 @@ const BasicExamination = () => {
     Array<{ path: string; url: string }>
   >([]);
   const [newFecalImages, setNewFecalImages] = useState<File[]>([]);
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [uploadedAudios, setUploadedAudios] = useState<
+    UploadedMedicalRecordAudio[]
+  >([]);
+  const [isLoadingAudios, setIsLoadingAudios] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const audioLoadRequestRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -139,6 +170,7 @@ const BasicExamination = () => {
 
         setAppointment(examinationData.appointment);
         setForm(examinationData.form);
+        setMedicalRecordId(examinationData.medicalRecordId);
         if (examinationData.medicalRecordId) {
           const fecalRecords = await getFecalExaminationsByMedicalRecordTestId(
             examinationData.medicalRecordId,
@@ -256,6 +288,81 @@ const BasicExamination = () => {
       ...current,
       ...validFiles.slice(0, Math.max(0, availableSlots)),
     ]);
+  }
+
+  async function handleAiAssistantOpenChange(open: boolean) {
+    setIsAiAssistantOpen(open);
+    const requestId = ++audioLoadRequestRef.current;
+
+    if (!open) {
+      setIsLoadingAudios(false);
+      return;
+    }
+
+    if (!medicalRecordId) {
+      setUploadedAudios([]);
+      setIsLoadingAudios(false);
+      return;
+    }
+
+    setIsLoadingAudios(true);
+    try {
+      const audios = await getMedicalRecordAudioFiles(medicalRecordId);
+      if (requestId === audioLoadRequestRef.current) {
+        setUploadedAudios(audios);
+      }
+    } catch (error) {
+      console.error("Unable to load medical record audio:", error);
+      if (requestId === audioLoadRequestRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Unable to load saved audio recordings right now.",
+        );
+      }
+    } finally {
+      if (requestId === audioLoadRequestRef.current) {
+        setIsLoadingAudios(false);
+      }
+    }
+  }
+
+  async function handleAudioUpload() {
+    if (!audioFile) {
+      toast.error("Choose an audio file to upload.");
+      return;
+    }
+    if (!appointmentId || !appointment) {
+      toast.error("Appointment not found.");
+      return;
+    }
+
+    setIsUploadingAudio(true);
+
+    try {
+      const medicalRecordId = await saveBasicExamination(
+        appointmentId,
+        appointment.hamster_id,
+        form,
+      );
+      setMedicalRecordId(medicalRecordId);
+      const uploaded = await uploadMedicalRecordAudio(medicalRecordId, audioFile);
+      setUploadedAudios((current) => [
+        uploaded,
+        ...current.filter((audio) => audio.id !== uploaded.id),
+      ]);
+      setAudioFile(null);
+      toast.success("Audio recording uploaded successfully.");
+    } catch (error) {
+      console.error("Unable to upload medical record audio:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to upload this audio recording right now.",
+      );
+    } finally {
+      setIsUploadingAudio(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -474,6 +581,145 @@ const BasicExamination = () => {
                           placeholder="Recommend medication, care plan, follow-up instructions, or monitoring steps."
                           value={form.treatment}
                         />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Dialog
+                          onOpenChange={handleAiAssistantOpenChange}
+                          open={isAiAssistantOpen}
+                        >
+                          <Button
+                            onClick={() => {
+                              void handleAiAssistantOpenChange(true);
+                            }}
+                            type="button"
+                            variant="outline"
+                          >
+                            <Sparkles aria-hidden="true" />
+                            AI assistant
+                          </Button>
+                          <DialogContent className="max-w-sm gap-4 p-4 sm:p-5">
+                            <DialogHeader className="flex-row items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <DialogTitle className="text-base">
+                                  AI assistant
+                                </DialogTitle>
+                                <DialogDescription className="text-xs">
+                                  Add an audio recording for examination notes.
+                                </DialogDescription>
+                              </div>
+                              <Button
+                                aria-label="Close AI assistant"
+                                className="-mr-2 -mt-2"
+                                onClick={() => {
+                                  void handleAiAssistantOpenChange(false);
+                                }}
+                                size="icon"
+                                type="button"
+                                variant="ghost"
+                              >
+                                <X aria-hidden="true" />
+                              </Button>
+                            </DialogHeader>
+
+                            <div className="flex min-h-20 items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 py-3">
+                              <AudioLines
+                                aria-hidden="true"
+                                className="size-5 shrink-0 text-muted-foreground"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">
+                                  {audioFile?.name ?? "Insert audio file"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {audioFile
+                                    ? `${(audioFile.size / (1024 * 1024)).toFixed(1)} MB`
+                                    : "MP3, WAV, or M4A"}
+                                </p>
+                              </div>
+                              <input
+                                accept="audio/*"
+                                aria-label="Select audio file"
+                                className="sr-only"
+                                disabled={isUploadingAudio}
+                                onChange={(event) => {
+                                  const file = event.currentTarget.files?.[0] ?? null;
+                                  event.currentTarget.value = "";
+                                  if (file && !isSupportedAudioFile(file)) {
+                                    toast.error("Choose a valid audio file.");
+                                    setAudioFile(null);
+                                    return;
+                                  }
+                                  setAudioFile(file);
+                                }}
+                                ref={audioInputRef}
+                                type="file"
+                              />
+                              <Button
+                                disabled={isUploadingAudio}
+                                onClick={() => audioInputRef.current?.click()}
+                                type="button"
+                                variant="outline"
+                              >
+                                {audioFile ? "Reselect" : "Browse"}
+                              </Button>
+                              {audioFile ? (
+                                <Button
+                                  aria-label="Remove selected audio file"
+                                  disabled={isUploadingAudio}
+                                  onClick={() => {
+                                    setAudioFile(null);
+                                    if (audioInputRef.current) {
+                                      audioInputRef.current.value = "";
+                                    }
+                                  }}
+                                  size="icon"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <X aria-hidden="true" />
+                                </Button>
+                              ) : null}
+                            </div>
+
+                            {isLoadingAudios ? (
+                              <p className="text-sm text-muted-foreground">
+                                Loading saved audio...
+                              </p>
+                            ) : null}
+                            {uploadedAudios.map((audio) => (
+                              <div
+                                className="space-y-2 rounded-lg border p-3"
+                                key={audio.id}
+                              >
+                                <p className="truncate text-sm font-medium">
+                                  {audio.name}
+                                </p>
+                                <audio
+                                  aria-label={`Play ${audio.name}`}
+                                  className="h-9 w-full"
+                                  controls
+                                  src={audio.url}
+                                >
+                                  Your browser does not support audio playback.
+                                </audio>
+                              </div>
+                            ))}
+
+                            <DialogFooter>
+                              <Button
+                                disabled={!audioFile || isUploadingAudio}
+                                onClick={handleAudioUpload}
+                                type="button"
+                              >
+                                {isUploadingAudio ? "Uploading..." : "Upload audio"}
+                              </Button>
+                              <Button disabled type="button" variant="outline">
+                                Analyze
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     </div>
                   </AccordionContent>
