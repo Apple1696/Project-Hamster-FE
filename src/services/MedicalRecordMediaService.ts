@@ -76,6 +76,19 @@ export async function uploadMedicalRecordAudio(
 
   if (!isSupportedAudioFile(file)) throw new Error("Choose a valid audio file.");
 
+  const { data: existingRows, error: existingError } = await supabase
+    .from("medical_record_media")
+    .select("id")
+    .eq("medical_record_id", medicalRecordId)
+    .eq("media_type", "audio")
+    .limit(1);
+  if (existingError) throw existingError;
+  if (existingRows && existingRows.length > 0) {
+    throw new Error(
+      "Delete the existing audio recording before uploading another.",
+    );
+  }
+
   const extension =
     file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10) ||
     "audio";
@@ -124,5 +137,38 @@ export async function uploadMedicalRecordAudio(
     }
 
     throw error;
+  }
+}
+
+export async function deleteMedicalRecordAudio(
+  audio: UploadedMedicalRecordAudio,
+): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) throw new Error("Sign in to delete an audio recording.");
+
+  const { data: deletedRow, error: deleteRowError } = await supabase
+    .from("medical_record_media")
+    .delete()
+    .eq("id", audio.id)
+    .eq("media_type", "audio")
+    .select("id")
+    .maybeSingle();
+
+  if (deleteRowError) throw deleteRowError;
+  if (!deletedRow) {
+    throw new Error(
+      "The audio recording was not found or you do not have permission to delete it.",
+    );
+  }
+
+  const { error: deleteObjectError } = await supabase.storage
+    .from(AUDIO_BUCKET)
+    .remove([audio.path]);
+
+  if (deleteObjectError) {
+    throw new Error(
+      `The recording was removed from the medical record, but its storage file could not be deleted: ${deleteObjectError.message}`,
+    );
   }
 }
