@@ -1,5 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, HeartPulse, PawPrint, X } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ArrowLeft,
+  AudioLines,
+  HeartPulse,
+  PawPrint,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -11,6 +23,14 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +49,25 @@ import {
   saveFecalExamination,
   type FecalExaminationForm,
 } from "@/services/FecalExaminationService";
+import {
+  getMedicalRecordAudioFiles,
+  isSupportedAudioFile,
+  uploadMedicalRecordAudio,
+  type UploadedMedicalRecordAudio,
+} from "@/services/MedicalRecordMediaService";
+import {
+  getAIAnalysisById,
+  reviewAIAnalysis,
+  type AIAnalysis,
+  type AIAnalysisReviewStatus,
+  type JsonValue,
+} from "@/services/AIAnalysisService";
+import {
+  getTranscriptionById,
+  requestAudioTranscription,
+  saveCorrectedTranscript,
+  type Transcription,
+} from "@/services/TranscriptionService";
 
 function formatAppointmentDate(value: string): string {
   const hasTime = /T\d{2}:\d{2}/.test(value);
@@ -85,11 +124,44 @@ function getTriStateValue(value: boolean | null): string {
   return value == null ? "" : String(value);
 }
 
+function jsonValueToEditorText(value: JsonValue | null): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) =>
+        typeof item === "string" ? item : JSON.stringify(item),
+      )
+      .join("\n");
+  }
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
+
+function editorTextToList(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+type AIReviewDraft = {
+  correctedTranscript: string;
+  symptoms: string;
+  observations: string;
+  diagnosis: string;
+  diagnosticTests: string;
+  treatment: string;
+  additionalNotes: string;
+};
+
+
+
 const BasicExamination = () => {
   const navigate = useNavigate();
   const { appointmentId } = useParams();
   const [appointment, setAppointment] =
     useState<BasicExaminationAppointment | null>(null);
+  const [medicalRecordId, setMedicalRecordId] = useState<string | null>(null);
   const [form, setForm] = useState<BasicExaminationForm>(emptyForm);
   const [fecalForm, setFecalForm] =
     useState<FecalExaminationForm>(emptyFecalForm);
@@ -101,6 +173,23 @@ const BasicExamination = () => {
     Array<{ path: string; url: string }>
   >([]);
   const [newFecalImages, setNewFecalImages] = useState<File[]>([]);
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [uploadedAudios, setUploadedAudios] = useState<
+    UploadedMedicalRecordAudio[]
+  >([]);
+  const [isLoadingAudios, setIsLoadingAudios] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [analyzingAudioId, setAnalyzingAudioId] = useState<string | null>(null);
+  const [isSavingAIReview, setIsSavingAIReview] = useState(false);
+  const [activeAIReview, setActiveAIReview] = useState<{
+    audioName: string;
+    transcription: Transcription;
+    analysis: AIAnalysis;
+  } | null>(null);
+  const [aiReviewDraft, setAIReviewDraft] = useState<AIReviewDraft | null>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const audioLoadRequestRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,6 +201,7 @@ const BasicExamination = () => {
       })),
     [newFecalImages],
   );
+ 
 
   useEffect(
     () => () => {
@@ -139,6 +229,7 @@ const BasicExamination = () => {
 
         setAppointment(examinationData.appointment);
         setForm(examinationData.form);
+        setMedicalRecordId(examinationData.medicalRecordId);
         if (examinationData.medicalRecordId) {
           const fecalRecords = await getFecalExaminationsByMedicalRecordTestId(
             examinationData.medicalRecordId,
@@ -256,6 +347,195 @@ const BasicExamination = () => {
       ...current,
       ...validFiles.slice(0, Math.max(0, availableSlots)),
     ]);
+  }
+
+  async function handleAiAssistantOpenChange(open: boolean) {
+    setIsAiAssistantOpen(open);
+    const requestId = ++audioLoadRequestRef.current;
+
+    if (!open) {
+      setIsLoadingAudios(false);
+      return;
+    }
+
+    if (!medicalRecordId) {
+      setUploadedAudios([]);
+      setIsLoadingAudios(false);
+      return;
+    }
+
+    setIsLoadingAudios(true);
+    try {
+      const audios = await getMedicalRecordAudioFiles(medicalRecordId);
+      if (requestId === audioLoadRequestRef.current) {
+        setUploadedAudios(audios);
+      }
+    } catch (error) {
+      console.error("Unable to load medical record audio:", error);
+      if (requestId === audioLoadRequestRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Unable to load saved audio recordings right now.",
+        );
+      }
+    } finally {
+      if (requestId === audioLoadRequestRef.current) {
+        setIsLoadingAudios(false);
+      }
+    }
+  }
+
+  async function handleAudioUpload() {
+    if (!audioFile) {
+      toast.error("Choose an audio file to upload.");
+      return;
+    }
+    if (!appointmentId || !appointment) {
+      toast.error("Appointment not found.");
+      return;
+    }
+
+    setIsUploadingAudio(true);
+
+    try {
+      const medicalRecordId = await saveBasicExamination(
+        appointmentId,
+        appointment.hamster_id,
+        form,
+      );
+      setMedicalRecordId(medicalRecordId);
+      const uploaded = await uploadMedicalRecordAudio(medicalRecordId, audioFile);
+      setUploadedAudios((current) => [
+        uploaded,
+        ...current.filter((audio) => audio.id !== uploaded.id),
+      ]);
+      setAudioFile(null);
+      toast.success("Audio recording uploaded successfully.");
+    } catch (error) {
+      console.error("Unable to upload medical record audio:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to upload this audio recording right now.",
+      );
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  }
+
+  async function handleAnalyzeAudio(audio: UploadedMedicalRecordAudio) {
+    if (analyzingAudioId || isSavingAIReview) return;
+
+    setAnalyzingAudioId(audio.id);
+    setActiveAIReview(null);
+    setAIReviewDraft(null);
+
+    try {
+      const result = await requestAudioTranscription(audio.id);
+      const [transcription, analysis] = await Promise.all([
+        getTranscriptionById(result.transcription_id),
+        getAIAnalysisById(result.ai_analysis_id),
+      ]);
+
+      if (!transcription || !analysis) {
+        throw new Error(
+          "The transcription or AI analysis was not available after processing.",
+        );
+      }
+
+      setActiveAIReview({
+        audioName: audio.name,
+        transcription,
+        analysis,
+      });
+      setAIReviewDraft({
+        correctedTranscript:
+          transcription.corrected_transcript ??
+          transcription.raw_transcript ??
+          "",
+        symptoms: jsonValueToEditorText(analysis.extracted_symptoms),
+        observations: jsonValueToEditorText(analysis.extracted_observations),
+        diagnosis: jsonValueToEditorText(analysis.predicted_diagnosis),
+        diagnosticTests: jsonValueToEditorText(
+          analysis.suggested_diagnostic_tests,
+        ),
+        treatment: jsonValueToEditorText(analysis.suggested_treatment),
+        additionalNotes: analysis.additional_notes ?? "",
+      });
+    } catch (error) {
+      console.error("Unable to analyze medical audio:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to analyze this audio recording right now.",
+      );
+    } finally {
+      setAnalyzingAudioId(null);
+    }
+  }
+
+  async function handleAIReview(status: AIAnalysisReviewStatus) {
+    if (!activeAIReview || !aiReviewDraft || isSavingAIReview) return;
+
+    setIsSavingAIReview(true);
+    try {
+      await saveCorrectedTranscript(
+        activeAIReview.transcription.id,
+        aiReviewDraft.correctedTranscript,
+      );
+
+      const symptoms = editorTextToList(aiReviewDraft.symptoms);
+      const observations = editorTextToList(aiReviewDraft.observations);
+      const diagnosis = editorTextToList(aiReviewDraft.diagnosis).join("\n");
+      const treatments = editorTextToList(aiReviewDraft.treatment);
+
+      const edits = {
+        extracted_symptoms: symptoms,
+        extracted_observations: observations,
+        predicted_diagnosis: editorTextToList(aiReviewDraft.diagnosis),
+        suggested_diagnostic_tests: editorTextToList(
+          aiReviewDraft.diagnosticTests,
+        ),
+        suggested_treatment: treatments,
+        additional_notes: aiReviewDraft.additionalNotes.trim() || null,
+      };
+      const updatedAnalysis = await reviewAIAnalysis({
+        analysisId: activeAIReview.analysis.id,
+        status,
+        edits,
+        medicalRecord: {
+          confirmedSymptoms: symptoms.length > 0 ? symptoms : null,
+          physicalExaminationNotes:
+            observations.length > 0 ? observations.join("\n") : null,
+          confirmedDiagnosis: diagnosis || null,
+          suggestedTreatment:
+            treatments.length > 0 ? treatments.join("\n") : null,
+        },
+      });
+
+      setActiveAIReview((current) =>
+        current ? { ...current, analysis: updatedAnalysis } : current,
+      );
+      setForm((current) => ({
+        ...current,
+        symptoms: symptoms.join(", "),
+        physicalExaminationNotes:
+          observations.length > 0 ? observations.join("\n") : "",
+        diagnosis,
+        treatment: treatments.join("\n"),
+      }));
+      toast.success("Reviewed suggestions applied to the medical record.");
+    } catch (error) {
+      console.error("Unable to save AI review:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save this AI review right now.",
+      );
+    } finally {
+      setIsSavingAIReview(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -474,6 +754,323 @@ const BasicExamination = () => {
                           placeholder="Recommend medication, care plan, follow-up instructions, or monitoring steps."
                           value={form.treatment}
                         />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Drawer
+                          onOpenChange={(open) => {
+                            void handleAiAssistantOpenChange(open);
+                          }}
+                          open={isAiAssistantOpen}
+                          swipeDirection="right"
+                        >
+                          <Button
+                            aria-expanded={isAiAssistantOpen}
+                            aria-haspopup="dialog"
+                            onClick={() => {
+                              void handleAiAssistantOpenChange(true);
+                            }}
+                            type="button"
+                            variant="outline"
+                          >
+                            <Sparkles aria-hidden="true" />
+                            AI assistant
+                          </Button>
+                          <DrawerContent
+                            className="gap-0 w-200 rounded-none border-l bg-background p-0 sm:rounded-l-2xl"
+                          >
+                            <DrawerHeader className="border-b px-5 py-4 text-left">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1">
+                                  <DrawerTitle className="text-base font-semibold">
+                                    AI assistant
+                                  </DrawerTitle>
+                                  <DrawerDescription className="text-xs">
+                                    Transcribe and review audio for this examination.
+                                  </DrawerDescription>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <Button
+                                    aria-label="Close AI assistant"
+                                    className="size-8"
+                                    onClick={() => {
+                                      void handleAiAssistantOpenChange(false);
+                                    }}
+                                    size="icon"
+                                    type="button"
+                                    variant="ghost"
+                                  >
+                                    <X aria-hidden="true" className="size-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </DrawerHeader>
+
+                            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+                              <section className="space-y-3 rounded-xl border bg-card p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                    <AudioLines
+                                      aria-hidden="true"
+                                      className="size-4"
+                                    />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold">
+                                      Add a recording
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      {audioFile
+                                        ? `${audioFile.name} · ${(audioFile.size / (1024 * 1024)).toFixed(1)} MB`
+                                        : "Choose an audio file to upload and analyze."}
+                                    </p>
+                                  </div>
+                                  <input
+                                    accept="audio/*"
+                                    aria-label="Select audio file"
+                                    className="sr-only"
+                                    disabled={isUploadingAudio}
+                                    onChange={(event) => {
+                                      const file =
+                                        event.currentTarget.files?.[0] ?? null;
+                                      event.currentTarget.value = "";
+                                      if (file && !isSupportedAudioFile(file)) {
+                                        toast.error("Choose a valid audio file.");
+                                        setAudioFile(null);
+                                        return;
+                                      }
+                                      setAudioFile(file);
+                                    }}
+                                    ref={audioInputRef}
+                                    type="file"
+                                  />
+                                  <Button
+                                    disabled={isUploadingAudio}
+                                    onClick={() => audioInputRef.current?.click()}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    {audioFile ? "Reselect" : "Browse"}
+                                  </Button>
+                                  {audioFile ? (
+                                    <Button
+                                      aria-label="Remove selected audio file"
+                                      disabled={isUploadingAudio}
+                                      onClick={() => {
+                                        setAudioFile(null);
+                                        if (audioInputRef.current) {
+                                          audioInputRef.current.value = "";
+                                        }
+                                      }}
+                                      size="icon"
+                                      type="button"
+                                      variant="ghost"
+                                    >
+                                      <X aria-hidden="true" className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                {/* <p className="text-xs text-muted-foreground">
+                                  Supported audio formats · maximum 15 MB
+                                </p> */}
+                              </section>
+
+                              <section className="space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <h3 className="text-sm font-semibold">
+                                      Recordings
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                      Saved audio for this medical record
+                                    </p>
+                                  </div>
+                                  {isLoadingAudios ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Loading…
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {uploadedAudios.map((audio) => (
+                                  <div
+                                    className="space-y-3 rounded-xl border bg-card p-3"
+                                    key={audio.id}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="min-w-0 truncate text-sm font-medium">
+                                        {audio.name}
+                                      </p>
+                                      <Button
+                                        disabled={
+                                          isLoadingAudios ||
+                                          analyzingAudioId !== null ||
+                                          isSavingAIReview
+                                        }
+                                        onClick={() => handleAnalyzeAudio(audio)}
+                                        size="sm"
+                                        type="button"
+                                      >
+                                        <Sparkles aria-hidden="true" />
+                                        {analyzingAudioId === audio.id
+                                          ? "Analyzing…"
+                                          : "Analyze"}
+                                      </Button>
+                                    </div>
+                                    <audio
+                                      aria-label={`Play ${audio.name}`}
+                                      className="h-9 w-full"
+                                      controls
+                                      src={audio.url}
+                                    >
+                                      Your browser does not support audio playback.
+                                    </audio>
+                                  </div>
+                                ))}
+
+                                {!isLoadingAudios &&
+                                  uploadedAudios.length === 0 ? (
+                                  <div className="rounded-xl border border-dashed px-4 py-6 text-center">
+                                    <p className="text-sm font-medium">
+                                      No recordings yet
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      Upload a recording to see it here.
+                                    </p>
+                                  </div>
+                                ) : null}
+                              </section>
+
+                              {activeAIReview && aiReviewDraft ? (
+                                <section className="space-y-4 rounded-xl border bg-card p-4">
+                                  <div>
+                                    <h3 className="text-sm font-semibold">
+                                      Analysis review
+                                    </h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {activeAIReview.audioName} · Verify suggestions before applying them.
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label htmlFor="rawTranscript">
+                                      Original transcript
+                                    </Label>
+                                    <Textarea
+                                      className="min-h-24"
+                                      id="rawTranscript"
+                                      readOnly
+                                      value={
+                                        activeAIReview.transcription.raw_transcript ??
+                                        ""
+                                      }
+                                    />
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label htmlFor="correctedTranscript">
+                                      Corrected transcript
+                                    </Label>
+                                    <Textarea
+                                      className="min-h-24"
+                                      id="correctedTranscript"
+                                      onChange={(event) =>
+                                        setAIReviewDraft((current) =>
+                                          current
+                                            ? {
+                                              ...current,
+                                              correctedTranscript:
+                                                event.target.value,
+                                            }
+                                            : current,
+                                        )
+                                      }
+                                      value={aiReviewDraft.correctedTranscript}
+                                    />
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    {(
+                                      [
+                                        ["symptoms", "Extracted symptoms"],
+                                        ["observations", "Observations"],
+                                        ["diagnosis", "Predicted diagnosis"],
+                                        ["diagnosticTests", "Suggested tests"],
+                                        ["treatment", "Suggested treatment"],
+                                        ["additionalNotes", "Additional notes"],
+                                      ] as const
+                                    ).map(([key, label]) => (
+                                      <div className="space-y-2" key={key}>
+                                        <Label htmlFor={`ai-${key}`}>
+                                          {label}
+                                        </Label>
+                                        <Textarea
+                                          className="min-h-24"
+                                          id={`ai-${key}`}
+                                          onChange={(event) =>
+                                            setAIReviewDraft((current) =>
+                                              current
+                                                ? {
+                                                  ...current,
+                                                  [key]: event.target.value,
+                                                }
+                                                : current,
+                                            )
+                                          }
+                                          value={aiReviewDraft[key]}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("rejected")}
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      Reject
+                                    </Button>
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("modified")}
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      {isSavingAIReview
+                                        ? "Saving…"
+                                        : "Save edits"}
+                                    </Button>
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("approved")}
+                                      type="button"
+                                    >
+                                      {isSavingAIReview
+                                        ? "Saving…"
+                                        : "Approve & apply"}
+                                    </Button>
+                                  </div>
+                                </section>
+                              ) : null}
+                            </div>
+
+                            <DrawerFooter className="border-t bg-background p-4 sm:p-5">
+                              <Button
+                                className="w-full"
+                                disabled={!audioFile || isUploadingAudio}
+                                onClick={handleAudioUpload}
+                                type="button"
+                              >
+                                {isUploadingAudio
+                                  ? "Uploading…"
+                                  : "Upload audio"}
+                              </Button>
+                            </DrawerFooter>
+                          </DrawerContent>
+                        </Drawer>
                       </div>
                     </div>
                   </AccordionContent>
