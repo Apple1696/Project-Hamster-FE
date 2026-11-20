@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   ArrowLeft,
   AudioLines,
@@ -19,13 +25,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,6 +155,10 @@ type AIReviewDraft = {
   additionalNotes: string;
 };
 
+type AssistantDrawerStyle = CSSProperties & {
+  "--drawer-content-width": string;
+};
+
 const BasicExamination = () => {
   const navigate = useNavigate();
   const { appointmentId } = useParams();
@@ -167,6 +177,7 @@ const BasicExamination = () => {
   >([]);
   const [newFecalImages, setNewFecalImages] = useState<File[]>([]);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [isAiAssistantWide, setIsAiAssistantWide] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [uploadedAudios, setUploadedAudios] = useState<
     UploadedMedicalRecordAudio[]
@@ -194,6 +205,12 @@ const BasicExamination = () => {
       })),
     [newFecalImages],
   );
+  const assistantDrawerStyle: AssistantDrawerStyle = {
+    "--drawer-content-width": isAiAssistantWide
+      ? "min(54rem, 100vw)"
+      : "min(38rem, 100vw)",
+    height: "100dvh",
+  };
 
   useEffect(
     () => () => {
@@ -749,11 +766,16 @@ const BasicExamination = () => {
                       </div>
 
                       <div className="flex justify-end">
-                        <Dialog
-                          onOpenChange={handleAiAssistantOpenChange}
+                        <Drawer
+                          onOpenChange={(open) => {
+                            void handleAiAssistantOpenChange(open);
+                          }}
                           open={isAiAssistantOpen}
+                          swipeDirection="right"
                         >
                           <Button
+                            aria-expanded={isAiAssistantOpen}
+                            aria-haspopup="dialog"
                             onClick={() => {
                               void handleAiAssistantOpenChange(true);
                             }}
@@ -763,258 +785,312 @@ const BasicExamination = () => {
                             <Sparkles aria-hidden="true" />
                             AI assistant
                           </Button>
-                          <DialogContent className="max-w-2xl gap-4 p-4 sm:p-5">
-                            <DialogHeader className="flex-row items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <DialogTitle className="text-base">
-                                  AI assistant
-                                </DialogTitle>
-                                <DialogDescription className="text-xs">
-                                  Add an audio recording for examination notes.
-                                </DialogDescription>
-                              </div>
-                              <Button
-                                aria-label="Close AI assistant"
-                                className="-mr-2 -mt-2"
-                                onClick={() => {
-                                  void handleAiAssistantOpenChange(false);
-                                }}
-                                size="icon"
-                                type="button"
-                                variant="ghost"
-                              >
-                                <X aria-hidden="true" />
-                              </Button>
-                            </DialogHeader>
-
-                            <div className="flex min-h-20 items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 py-3">
-                              <AudioLines
-                                aria-hidden="true"
-                                className="size-5 shrink-0 text-muted-foreground"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium">
-                                  {audioFile?.name ?? "Insert audio file"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {audioFile
-                                    ? `${(audioFile.size / (1024 * 1024)).toFixed(1)} MB`
-                                    : "MP3, WAV, or M4A"}
-                                </p>
-                              </div>
-                              <input
-                                accept="audio/*"
-                                aria-label="Select audio file"
-                                className="sr-only"
-                                disabled={isUploadingAudio}
-                                onChange={(event) => {
-                                  const file = event.currentTarget.files?.[0] ?? null;
-                                  event.currentTarget.value = "";
-                                  if (file && !isSupportedAudioFile(file)) {
-                                    toast.error("Choose a valid audio file.");
-                                    setAudioFile(null);
-                                    return;
-                                  }
-                                  setAudioFile(file);
-                                }}
-                                ref={audioInputRef}
-                                type="file"
-                              />
-                              <Button
-                                disabled={isUploadingAudio}
-                                onClick={() => audioInputRef.current?.click()}
-                                type="button"
-                                variant="outline"
-                              >
-                                {audioFile ? "Reselect" : "Browse"}
-                              </Button>
-                              {audioFile ? (
-                                <Button
-                                  aria-label="Remove selected audio file"
-                                  disabled={isUploadingAudio}
-                                  onClick={() => {
-                                    setAudioFile(null);
-                                    if (audioInputRef.current) {
-                                      audioInputRef.current.value = "";
+                          <DrawerContent
+                            className="gap-0 w-200 rounded-none border-l bg-background p-0 sm:rounded-l-2xl"
+                            style={assistantDrawerStyle}
+                          >
+                            <DrawerHeader className="border-b px-5 py-4 text-left">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1">
+                                  <DrawerTitle className="text-base font-semibold">
+                                    AI assistant
+                                  </DrawerTitle>
+                                  <DrawerDescription className="text-xs">
+                                    Transcribe and review audio for this examination.
+                                  </DrawerDescription>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  {/* <Button
+                                    onClick={() =>
+                                      setIsAiAssistantWide((current) => !current)
                                     }
-                                  }}
-                                  size="icon"
-                                  type="button"
-                                  variant="ghost"
-                                >
-                                  <X aria-hidden="true" />
-                                </Button>
+                                    size="sm"
+                                    type="button"
+                                    variant="ghost"
+                                  >
+                                    {isAiAssistantWide ? "Narrow" : "Widen"}
+                                  </Button> */}
+                                  <Button
+                                    aria-label="Close AI assistant"
+                                    className="size-8"
+                                    onClick={() => {
+                                      void handleAiAssistantOpenChange(false);
+                                    }}
+                                    size="icon"
+                                    type="button"
+                                    variant="ghost"
+                                  >
+                                    <X aria-hidden="true" className="size-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </DrawerHeader>
+
+                            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+                              <section className="space-y-3 rounded-xl border bg-card p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                    <AudioLines
+                                      aria-hidden="true"
+                                      className="size-4"
+                                    />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold">
+                                      Add a recording
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      {audioFile
+                                        ? `${audioFile.name} · ${(audioFile.size / (1024 * 1024)).toFixed(1)} MB`
+                                        : "Choose an audio file to upload and analyze."}
+                                    </p>
+                                  </div>
+                                  <input
+                                    accept="audio/*"
+                                    aria-label="Select audio file"
+                                    className="sr-only"
+                                    disabled={isUploadingAudio}
+                                    onChange={(event) => {
+                                      const file =
+                                        event.currentTarget.files?.[0] ?? null;
+                                      event.currentTarget.value = "";
+                                      if (file && !isSupportedAudioFile(file)) {
+                                        toast.error("Choose a valid audio file.");
+                                        setAudioFile(null);
+                                        return;
+                                      }
+                                      setAudioFile(file);
+                                    }}
+                                    ref={audioInputRef}
+                                    type="file"
+                                  />
+                                  <Button
+                                    disabled={isUploadingAudio}
+                                    onClick={() => audioInputRef.current?.click()}
+                                    size="sm"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    {audioFile ? "Reselect" : "Browse"}
+                                  </Button>
+                                  {audioFile ? (
+                                    <Button
+                                      aria-label="Remove selected audio file"
+                                      disabled={isUploadingAudio}
+                                      onClick={() => {
+                                        setAudioFile(null);
+                                        if (audioInputRef.current) {
+                                          audioInputRef.current.value = "";
+                                        }
+                                      }}
+                                      size="icon"
+                                      type="button"
+                                      variant="ghost"
+                                    >
+                                      <X aria-hidden="true" className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                {/* <p className="text-xs text-muted-foreground">
+                                  Supported audio formats · maximum 15 MB
+                                </p> */}
+                              </section>
+
+                              <section className="space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <h3 className="text-sm font-semibold">
+                                      Recordings
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                      Saved audio for this medical record
+                                    </p>
+                                  </div>
+                                  {isLoadingAudios ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Loading…
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {uploadedAudios.map((audio) => (
+                                  <div
+                                    className="space-y-3 rounded-xl border bg-card p-3"
+                                    key={audio.id}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="min-w-0 truncate text-sm font-medium">
+                                        {audio.name}
+                                      </p>
+                                      <Button
+                                        disabled={
+                                          isLoadingAudios ||
+                                          analyzingAudioId !== null ||
+                                          isSavingAIReview
+                                        }
+                                        onClick={() => handleAnalyzeAudio(audio)}
+                                        size="sm"
+                                        type="button"
+                                      >
+                                        <Sparkles aria-hidden="true" />
+                                        {analyzingAudioId === audio.id
+                                          ? "Analyzing…"
+                                          : "Analyze"}
+                                      </Button>
+                                    </div>
+                                    <audio
+                                      aria-label={`Play ${audio.name}`}
+                                      className="h-9 w-full"
+                                      controls
+                                      src={audio.url}
+                                    >
+                                      Your browser does not support audio playback.
+                                    </audio>
+                                  </div>
+                                ))}
+
+                                {!isLoadingAudios &&
+                                  uploadedAudios.length === 0 ? (
+                                  <div className="rounded-xl border border-dashed px-4 py-6 text-center">
+                                    <p className="text-sm font-medium">
+                                      No recordings yet
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      Upload a recording to see it here.
+                                    </p>
+                                  </div>
+                                ) : null}
+                              </section>
+
+                              {activeAIReview && aiReviewDraft ? (
+                                <section className="space-y-4 rounded-xl border bg-card p-4">
+                                  <div>
+                                    <h3 className="text-sm font-semibold">
+                                      Analysis review
+                                    </h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {activeAIReview.audioName} · Verify suggestions before applying them.
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label htmlFor="rawTranscript">
+                                      Original transcript
+                                    </Label>
+                                    <Textarea
+                                      className="min-h-24"
+                                      id="rawTranscript"
+                                      readOnly
+                                      value={
+                                        activeAIReview.transcription.raw_transcript ??
+                                        ""
+                                      }
+                                    />
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label htmlFor="correctedTranscript">
+                                      Corrected transcript
+                                    </Label>
+                                    <Textarea
+                                      className="min-h-24"
+                                      id="correctedTranscript"
+                                      onChange={(event) =>
+                                        setAIReviewDraft((current) =>
+                                          current
+                                            ? {
+                                              ...current,
+                                              correctedTranscript:
+                                                event.target.value,
+                                            }
+                                            : current,
+                                        )
+                                      }
+                                      value={aiReviewDraft.correctedTranscript}
+                                    />
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    {(
+                                      [
+                                        ["symptoms", "Extracted symptoms"],
+                                        ["observations", "Observations"],
+                                        ["diagnosis", "Predicted diagnosis"],
+                                        ["diagnosticTests", "Suggested tests"],
+                                        ["treatment", "Suggested treatment"],
+                                        ["additionalNotes", "Additional notes"],
+                                      ] as const
+                                    ).map(([key, label]) => (
+                                      <div className="space-y-2" key={key}>
+                                        <Label htmlFor={`ai-${key}`}>
+                                          {label}
+                                        </Label>
+                                        <Textarea
+                                          className="min-h-24"
+                                          id={`ai-${key}`}
+                                          onChange={(event) =>
+                                            setAIReviewDraft((current) =>
+                                              current
+                                                ? {
+                                                  ...current,
+                                                  [key]: event.target.value,
+                                                }
+                                                : current,
+                                            )
+                                          }
+                                          value={aiReviewDraft[key]}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("rejected")}
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      Reject
+                                    </Button>
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("modified")}
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      {isSavingAIReview
+                                        ? "Saving…"
+                                        : "Save edits"}
+                                    </Button>
+                                    <Button
+                                      disabled={isSavingAIReview}
+                                      onClick={() => handleAIReview("approved")}
+                                      type="button"
+                                    >
+                                      {isSavingAIReview
+                                        ? "Saving…"
+                                        : "Approve & apply"}
+                                    </Button>
+                                  </div>
+                                </section>
                               ) : null}
                             </div>
 
-                            {isLoadingAudios ? (
-                              <p className="text-sm text-muted-foreground">
-                                Loading saved audio...
-                              </p>
-                            ) : null}
-                            {uploadedAudios.map((audio) => (
-                              <div
-                                className="space-y-2 rounded-lg border p-3"
-                                key={audio.id}
-                              >
-                                <p className="truncate text-sm font-medium">
-                                  {audio.name}
-                                </p>
-                                <audio
-                                  aria-label={`Play ${audio.name}`}
-                                  className="h-9 w-full"
-                                  controls
-                                  src={audio.url}
-                                >
-                                  Your browser does not support audio playback.
-                                </audio>
-                                <Button
-                                  disabled={
-                                    isLoadingAudios ||
-                                    analyzingAudioId !== null ||
-                                    isSavingAIReview
-                                  }
-                                  onClick={() => handleAnalyzeAudio(audio)}
-                                  size="sm"
-                                  type="button"
-                                >
-                                  <Sparkles aria-hidden="true" />
-                                  {analyzingAudioId === audio.id
-                                    ? "Analyzing..."
-                                    : "Analyze recording"}
-                                </Button>
-                              </div>
-                            ))}
-
-                            {uploadedAudios.length === 0 &&
-                              !isLoadingAudios ? (
-                              <p className="text-sm text-muted-foreground">
-                                Upload an audio recording to analyze it.
-                              </p>
-                            ) : null}
-
-                            {activeAIReview && aiReviewDraft ? (
-                              <div className="max-h-[50dvh] space-y-4 overflow-y-auto rounded-lg border p-3">
-                                <div>
-                                  <p className="text-sm font-semibold">
-                                    Review: {activeAIReview.audioName}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Verify the transcript and suggestions before applying them.
-                                  </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="rawTranscript">
-                                    Original transcript
-                                  </Label>
-                                  <Textarea
-                                    id="rawTranscript"
-                                    readOnly
-                                    value={
-                                      activeAIReview.transcription.raw_transcript ??
-                                      ""
-                                    }
-                                  />
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="correctedTranscript">
-                                    Corrected transcript
-                                  </Label>
-                                  <Textarea
-                                    id="correctedTranscript"
-                                    onChange={(event) =>
-                                      setAIReviewDraft((current) =>
-                                        current
-                                          ? {
-                                            ...current,
-                                            correctedTranscript:
-                                              event.target.value,
-                                          }
-                                          : current,
-                                      )
-                                    }
-                                    value={aiReviewDraft.correctedTranscript}
-                                  />
-                                </div>
-
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                  {(
-                                    [
-                                      ["symptoms", "Extracted symptoms"],
-                                      ["observations", "Observations"],
-                                      ["diagnosis", "Predicted diagnosis"],
-                                      ["diagnosticTests", "Suggested tests"],
-                                      ["treatment", "Suggested treatment"],
-                                      ["additionalNotes", "Additional notes"],
-                                    ] as const
-                                  ).map(([key, label]) => (
-                                    <div className="space-y-2" key={key}>
-                                      <Label htmlFor={`ai-${key}`}>
-                                        {label}
-                                      </Label>
-                                      <Textarea
-                                        id={`ai-${key}`}
-                                        onChange={(event) =>
-                                          setAIReviewDraft((current) =>
-                                            current
-                                              ? {
-                                                ...current,
-                                                [key]: event.target.value,
-                                              }
-                                              : current,
-                                          )
-                                        }
-                                        value={aiReviewDraft[key]}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-
-                                <div className="flex flex-wrap justify-end gap-2">
-                                  <Button
-                                    disabled={isSavingAIReview}
-                                    onClick={() => handleAIReview("rejected")}
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    Reject
-                                  </Button>
-                                  <Button
-                                    disabled={isSavingAIReview}
-                                    onClick={() => handleAIReview("modified")}
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    {isSavingAIReview
-                                      ? "Saving..."
-                                      : "Save edits & apply"}
-                                  </Button>
-                                  <Button
-                                    disabled={isSavingAIReview}
-                                    onClick={() => handleAIReview("approved")}
-                                    type="button"
-                                  >
-                                    {isSavingAIReview
-                                      ? "Saving..."
-                                      : "Approve & apply"}
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            <DialogFooter>
+                            <DrawerFooter className="border-t bg-background p-4 sm:p-5">
                               <Button
+                                className="w-full"
                                 disabled={!audioFile || isUploadingAudio}
                                 onClick={handleAudioUpload}
                                 type="button"
                               >
-                                {isUploadingAudio ? "Uploading..." : "Upload audio"}
+                                {isUploadingAudio
+                                  ? "Uploading…"
+                                  : "Upload audio"}
                               </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+                            </DrawerFooter>
+                          </DrawerContent>
+                        </Drawer>
                       </div>
                     </div>
                   </AccordionContent>
@@ -1022,7 +1098,7 @@ const BasicExamination = () => {
               </Accordion>
             </Card>
 
-            <Card className="border-border/80 bg-card shadow-sm">
+            {/* <Card className="border-border/80 bg-card shadow-sm">
               <Accordion>
                 <AccordionItem className="border-0" value="fecal-examination">
                   <div className="px-6 py-2">
@@ -1274,7 +1350,7 @@ const BasicExamination = () => {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-            </Card>
+            </Card> */}
 
             <div className="flex justify-end">
               <Button disabled={isSubmitting} type="submit" size="lg">
