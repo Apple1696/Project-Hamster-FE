@@ -50,6 +50,19 @@ import {
   uploadMedicalRecordAudio,
   type UploadedMedicalRecordAudio,
 } from "@/services/MedicalRecordMediaService";
+import {
+  getAIAnalysisById,
+  reviewAIAnalysis,
+  type AIAnalysis,
+  type AIAnalysisReviewStatus,
+  type JsonValue,
+} from "@/services/AIAnalysisService";
+import {
+  getTranscriptionById,
+  requestAudioTranscription,
+  saveCorrectedTranscript,
+  type Transcription,
+} from "@/services/TranscriptionService";
 
 function formatAppointmentDate(value: string): string {
   const hasTime = /T\d{2}:\d{2}/.test(value);
@@ -106,6 +119,36 @@ function getTriStateValue(value: boolean | null): string {
   return value == null ? "" : String(value);
 }
 
+function jsonValueToEditorText(value: JsonValue | null): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) =>
+        typeof item === "string" ? item : JSON.stringify(item),
+      )
+      .join("\n");
+  }
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
+
+function editorTextToList(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+type AIReviewDraft = {
+  correctedTranscript: string;
+  symptoms: string;
+  observations: string;
+  diagnosis: string;
+  diagnosticTests: string;
+  treatment: string;
+  additionalNotes: string;
+};
+
 const BasicExamination = () => {
   const navigate = useNavigate();
   const { appointmentId } = useParams();
@@ -130,6 +173,14 @@ const BasicExamination = () => {
   >([]);
   const [isLoadingAudios, setIsLoadingAudios] = useState(false);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [analyzingAudioId, setAnalyzingAudioId] = useState<string | null>(null);
+  const [isSavingAIReview, setIsSavingAIReview] = useState(false);
+  const [activeAIReview, setActiveAIReview] = useState<{
+    audioName: string;
+    transcription: Transcription;
+    analysis: AIAnalysis;
+  } | null>(null);
+  const [aiReviewDraft, setAIReviewDraft] = useState<AIReviewDraft | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const audioLoadRequestRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -362,6 +413,120 @@ const BasicExamination = () => {
       );
     } finally {
       setIsUploadingAudio(false);
+    }
+  }
+
+  async function handleAnalyzeAudio(audio: UploadedMedicalRecordAudio) {
+    if (analyzingAudioId || isSavingAIReview) return;
+
+    setAnalyzingAudioId(audio.id);
+    setActiveAIReview(null);
+    setAIReviewDraft(null);
+
+    try {
+      const result = await requestAudioTranscription(audio.id);
+      const [transcription, analysis] = await Promise.all([
+        getTranscriptionById(result.transcription_id),
+        getAIAnalysisById(result.ai_analysis_id),
+      ]);
+
+      if (!transcription || !analysis) {
+        throw new Error(
+          "The transcription or AI analysis was not available after processing.",
+        );
+      }
+
+      setActiveAIReview({
+        audioName: audio.name,
+        transcription,
+        analysis,
+      });
+      setAIReviewDraft({
+        correctedTranscript:
+          transcription.corrected_transcript ??
+          transcription.raw_transcript ??
+          "",
+        symptoms: jsonValueToEditorText(analysis.extracted_symptoms),
+        observations: jsonValueToEditorText(analysis.extracted_observations),
+        diagnosis: jsonValueToEditorText(analysis.predicted_diagnosis),
+        diagnosticTests: jsonValueToEditorText(
+          analysis.suggested_diagnostic_tests,
+        ),
+        treatment: jsonValueToEditorText(analysis.suggested_treatment),
+        additionalNotes: analysis.additional_notes ?? "",
+      });
+    } catch (error) {
+      console.error("Unable to analyze medical audio:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to analyze this audio recording right now.",
+      );
+    } finally {
+      setAnalyzingAudioId(null);
+    }
+  }
+
+  async function handleAIReview(status: AIAnalysisReviewStatus) {
+    if (!activeAIReview || !aiReviewDraft || isSavingAIReview) return;
+
+    setIsSavingAIReview(true);
+    try {
+      await saveCorrectedTranscript(
+        activeAIReview.transcription.id,
+        aiReviewDraft.correctedTranscript,
+      );
+
+      const symptoms = editorTextToList(aiReviewDraft.symptoms);
+      const observations = editorTextToList(aiReviewDraft.observations);
+      const diagnosis = editorTextToList(aiReviewDraft.diagnosis).join("\n");
+      const treatments = editorTextToList(aiReviewDraft.treatment);
+
+      const edits = {
+        extracted_symptoms: symptoms,
+        extracted_observations: observations,
+        predicted_diagnosis: editorTextToList(aiReviewDraft.diagnosis),
+        suggested_diagnostic_tests: editorTextToList(
+          aiReviewDraft.diagnosticTests,
+        ),
+        suggested_treatment: treatments,
+        additional_notes: aiReviewDraft.additionalNotes.trim() || null,
+      };
+      const updatedAnalysis = await reviewAIAnalysis({
+        analysisId: activeAIReview.analysis.id,
+        status,
+        edits,
+        medicalRecord: {
+          confirmedSymptoms: symptoms.length > 0 ? symptoms : null,
+          physicalExaminationNotes:
+            observations.length > 0 ? observations.join("\n") : null,
+          confirmedDiagnosis: diagnosis || null,
+          suggestedTreatment:
+            treatments.length > 0 ? treatments.join("\n") : null,
+        },
+      });
+
+      setActiveAIReview((current) =>
+        current ? { ...current, analysis: updatedAnalysis } : current,
+      );
+      setForm((current) => ({
+        ...current,
+        symptoms: symptoms.join(", "),
+        physicalExaminationNotes:
+          observations.length > 0 ? observations.join("\n") : "",
+        diagnosis,
+        treatment: treatments.join("\n"),
+      }));
+      toast.success("Reviewed suggestions applied to the medical record.");
+    } catch (error) {
+      console.error("Unable to save AI review:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save this AI review right now.",
+      );
+    } finally {
+      setIsSavingAIReview(false);
     }
   }
 
@@ -598,7 +763,7 @@ const BasicExamination = () => {
                             <Sparkles aria-hidden="true" />
                             AI assistant
                           </Button>
-                          <DialogContent className="max-w-sm gap-4 p-4 sm:p-5">
+                          <DialogContent className="max-w-2xl gap-4 p-4 sm:p-5">
                             <DialogHeader className="flex-row items-start justify-between gap-3">
                               <div className="space-y-1">
                                 <DialogTitle className="text-base">
@@ -703,8 +868,141 @@ const BasicExamination = () => {
                                 >
                                   Your browser does not support audio playback.
                                 </audio>
+                                <Button
+                                  disabled={
+                                    isLoadingAudios ||
+                                    analyzingAudioId !== null ||
+                                    isSavingAIReview
+                                  }
+                                  onClick={() => handleAnalyzeAudio(audio)}
+                                  size="sm"
+                                  type="button"
+                                >
+                                  <Sparkles aria-hidden="true" />
+                                  {analyzingAudioId === audio.id
+                                    ? "Analyzing..."
+                                    : "Analyze recording"}
+                                </Button>
                               </div>
                             ))}
+
+                            {uploadedAudios.length === 0 &&
+                              !isLoadingAudios ? (
+                              <p className="text-sm text-muted-foreground">
+                                Upload an audio recording to analyze it.
+                              </p>
+                            ) : null}
+
+                            {activeAIReview && aiReviewDraft ? (
+                              <div className="max-h-[50dvh] space-y-4 overflow-y-auto rounded-lg border p-3">
+                                <div>
+                                  <p className="text-sm font-semibold">
+                                    Review: {activeAIReview.audioName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Verify the transcript and suggestions before applying them.
+                                  </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="rawTranscript">
+                                    Original transcript
+                                  </Label>
+                                  <Textarea
+                                    id="rawTranscript"
+                                    readOnly
+                                    value={
+                                      activeAIReview.transcription.raw_transcript ??
+                                      ""
+                                    }
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="correctedTranscript">
+                                    Corrected transcript
+                                  </Label>
+                                  <Textarea
+                                    id="correctedTranscript"
+                                    onChange={(event) =>
+                                      setAIReviewDraft((current) =>
+                                        current
+                                          ? {
+                                            ...current,
+                                            correctedTranscript:
+                                              event.target.value,
+                                          }
+                                          : current,
+                                      )
+                                    }
+                                    value={aiReviewDraft.correctedTranscript}
+                                  />
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {(
+                                    [
+                                      ["symptoms", "Extracted symptoms"],
+                                      ["observations", "Observations"],
+                                      ["diagnosis", "Predicted diagnosis"],
+                                      ["diagnosticTests", "Suggested tests"],
+                                      ["treatment", "Suggested treatment"],
+                                      ["additionalNotes", "Additional notes"],
+                                    ] as const
+                                  ).map(([key, label]) => (
+                                    <div className="space-y-2" key={key}>
+                                      <Label htmlFor={`ai-${key}`}>
+                                        {label}
+                                      </Label>
+                                      <Textarea
+                                        id={`ai-${key}`}
+                                        onChange={(event) =>
+                                          setAIReviewDraft((current) =>
+                                            current
+                                              ? {
+                                                ...current,
+                                                [key]: event.target.value,
+                                              }
+                                              : current,
+                                          )
+                                        }
+                                        value={aiReviewDraft[key]}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <Button
+                                    disabled={isSavingAIReview}
+                                    onClick={() => handleAIReview("rejected")}
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    Reject
+                                  </Button>
+                                  <Button
+                                    disabled={isSavingAIReview}
+                                    onClick={() => handleAIReview("modified")}
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    {isSavingAIReview
+                                      ? "Saving..."
+                                      : "Save edits & apply"}
+                                  </Button>
+                                  <Button
+                                    disabled={isSavingAIReview}
+                                    onClick={() => handleAIReview("approved")}
+                                    type="button"
+                                  >
+                                    {isSavingAIReview
+                                      ? "Saving..."
+                                      : "Approve & apply"}
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
 
                             <DialogFooter>
                               <Button
@@ -713,9 +1011,6 @@ const BasicExamination = () => {
                                 type="button"
                               >
                                 {isUploadingAudio ? "Uploading..." : "Upload audio"}
-                              </Button>
-                              <Button disabled type="button" variant="outline">
-                                Analyze
                               </Button>
                             </DialogFooter>
                           </DialogContent>
