@@ -58,6 +58,7 @@ import {
 } from "@/services/MedicalRecordMediaService";
 import {
   getAIAnalysisById,
+  getLatestAIAnalysisByMedicalRecord,
   reviewAIAnalysis,
   type AIAnalysis,
   type AIAnalysisReviewStatus,
@@ -215,6 +216,64 @@ const BasicExamination = () => {
   useEffect(() => {
     let isCurrent = true;
 
+    async function restoreLatestAIAnalysis() {
+      if (!medicalRecordId) {
+        if (isCurrent) {
+          setActiveAIReview(null);
+          setAIReviewDraft(null);
+        }
+        return;
+      }
+
+      try {
+        const analysis =
+          await getLatestAIAnalysisByMedicalRecord(medicalRecordId);
+        if (!isCurrent) return;
+        if (!analysis) {
+          setActiveAIReview(null);
+          setAIReviewDraft(null);
+          return;
+        }
+
+        const transcription = await getTranscriptionById(
+          analysis.transcription_id,
+        );
+        if (!isCurrent || !transcription) return;
+
+        setActiveAIReview({
+          audioName: "Saved medical recording",
+          transcription,
+          analysis,
+        });
+        setAIReviewDraft({
+          correctedTranscript:
+            transcription.corrected_transcript ??
+            transcription.raw_transcript ??
+            "",
+          symptoms: jsonValueToEditorText(analysis.extracted_symptoms),
+          observations: jsonValueToEditorText(analysis.extracted_observations),
+          diagnosis: jsonValueToEditorText(analysis.predicted_diagnosis),
+          diagnosticTests: jsonValueToEditorText(
+            analysis.suggested_diagnostic_tests,
+          ),
+          treatment: jsonValueToEditorText(analysis.suggested_treatment),
+          additionalNotes: analysis.additional_notes ?? "",
+        });
+      } catch (error) {
+        console.error("Unable to restore AI analysis:", error);
+      }
+    }
+
+    void restoreLatestAIAnalysis();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [medicalRecordId]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
     async function loadAppointment() {
       if (!appointmentId) {
         if (isCurrent) {
@@ -368,9 +427,53 @@ const BasicExamination = () => {
 
     setIsLoadingAudios(true);
     try {
-      const audios = await getMedicalRecordAudioFiles(medicalRecordId);
+      const [audios, latestAnalysis] = await Promise.all([
+        getMedicalRecordAudioFiles(medicalRecordId),
+        getLatestAIAnalysisByMedicalRecord(medicalRecordId),
+      ]);
       if (requestId === audioLoadRequestRef.current) {
         setUploadedAudios(audios);
+      }
+      if (
+        requestId === audioLoadRequestRef.current &&
+        latestAnalysis
+      ) {
+        const transcription = await getTranscriptionById(
+          latestAnalysis.transcription_id,
+        );
+        if (requestId !== audioLoadRequestRef.current || !transcription) {
+          return;
+        }
+
+        const matchingAudio = audios.find(
+          (audio) => audio.id === transcription.media_id,
+        );
+        setActiveAIReview({
+          audioName: matchingAudio?.name ?? "Saved medical recording",
+          transcription,
+          analysis: latestAnalysis,
+        });
+        setAIReviewDraft({
+          correctedTranscript:
+            transcription.corrected_transcript ??
+            transcription.raw_transcript ??
+            "",
+          symptoms: jsonValueToEditorText(latestAnalysis.extracted_symptoms),
+          observations: jsonValueToEditorText(
+            latestAnalysis.extracted_observations,
+          ),
+          diagnosis: jsonValueToEditorText(latestAnalysis.predicted_diagnosis),
+          diagnosticTests: jsonValueToEditorText(
+            latestAnalysis.suggested_diagnostic_tests,
+          ),
+          treatment: jsonValueToEditorText(
+            latestAnalysis.suggested_treatment,
+          ),
+          additionalNotes: latestAnalysis.additional_notes ?? "",
+        });
+      } else if (requestId === audioLoadRequestRef.current) {
+        setActiveAIReview(null);
+        setAIReviewDraft(null);
       }
     } catch (error) {
       console.error("Unable to load medical record audio:", error);
@@ -645,11 +748,11 @@ const BasicExamination = () => {
               Back
             </Button>
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {/* <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Examination
-              </p>
+              </p> */}
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Basic Examination
+                Examination
               </h1>
             </div>
           </div>
@@ -1094,24 +1197,6 @@ const BasicExamination = () => {
                                   </div>
 
                                   <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
-                                    <Button
-                                      disabled={isSavingAIReview}
-                                      onClick={() => handleAIReview("rejected")}
-                                      type="button"
-                                      variant="outline"
-                                    >
-                                      Reject
-                                    </Button>
-                                    <Button
-                                      disabled={isSavingAIReview}
-                                      onClick={() => handleAIReview("modified")}
-                                      type="button"
-                                      variant="outline"
-                                    >
-                                      {isSavingAIReview
-                                        ? "Saving…"
-                                        : "Save edits"}
-                                    </Button>
                                     <Button
                                       disabled={isSavingAIReview}
                                       onClick={() => handleAIReview("approved")}

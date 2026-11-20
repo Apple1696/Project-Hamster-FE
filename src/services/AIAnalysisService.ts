@@ -78,6 +78,21 @@ export async function getAIAnalysisById(
   return data as AIAnalysis | null;
 }
 
+export async function getLatestAIAnalysisByMedicalRecord(
+  medicalRecordId: string,
+): Promise<AIAnalysis | null> {
+  const { data, error } = await supabase
+    .from("ai_analysis")
+    .select(AI_ANALYSIS_COLUMNS)
+    .eq("medical_record_id", medicalRecordId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as AIAnalysis | null;
+}
+
 export async function reviewAIAnalysis(
   input:
     | {
