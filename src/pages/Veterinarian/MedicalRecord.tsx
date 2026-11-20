@@ -537,28 +537,26 @@ const BasicExamination = () => {
         analysisId: activeAIReview.analysis.id,
         status,
         edits,
-        medicalRecord: {
-          confirmedSymptoms: symptoms.length > 0 ? symptoms : null,
-          physicalExaminationNotes:
-            observations.length > 0 ? observations.join("\n") : null,
-          confirmedDiagnosis: diagnosis || null,
-          suggestedTreatment:
-            treatments.length > 0 ? treatments.join("\n") : null,
-        },
       });
 
       setActiveAIReview((current) =>
         current ? { ...current, analysis: updatedAnalysis } : current,
       );
-      setForm((current) => ({
-        ...current,
-        symptoms: symptoms.join(", "),
-        physicalExaminationNotes:
-          observations.length > 0 ? observations.join("\n") : "",
-        diagnosis,
-        treatment: treatments.join("\n"),
-      }));
-      toast.success("Reviewed suggestions applied to the medical record.");
+      if (status === "approved" || status === "modified") {
+        setForm((current) => ({
+          ...current,
+          symptoms: symptoms.join(", "),
+          physicalExaminationNotes:
+            observations.length > 0 ? observations.join("\n") : "",
+          diagnosis,
+          treatment: treatments.join("\n"),
+        }));
+        toast.success(
+          "Reviewed suggestions added to the examination draft. Database unchanged.",
+        );
+      } else {
+        toast.success("AI analysis rejected.");
+      }
     } catch (error) {
       console.error("Unable to save AI review:", error);
       toast.error(
