@@ -50,6 +50,7 @@ import {
   type FecalExaminationForm,
 } from "@/services/FecalExaminationService";
 import {
+  deleteMedicalRecordAudio,
   getMedicalRecordAudioFiles,
   isSupportedAudioFile,
   uploadMedicalRecordAudio,
@@ -180,6 +181,7 @@ const BasicExamination = () => {
   >([]);
   const [isLoadingAudios, setIsLoadingAudios] = useState(false);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [deletingAudioId, setDeletingAudioId] = useState<string | null>(null);
   const [analyzingAudioId, setAnalyzingAudioId] = useState<string | null>(null);
   const [isSavingAIReview, setIsSavingAIReview] = useState(false);
   const [activeAIReview, setActiveAIReview] = useState<{
@@ -387,6 +389,10 @@ const BasicExamination = () => {
   }
 
   async function handleAudioUpload() {
+    if (uploadedAudios.length > 0) {
+      toast.error("Delete the existing audio recording before uploading another.");
+      return;
+    }
     if (!audioFile) {
       toast.error("Choose an audio file to upload.");
       return;
@@ -421,6 +427,33 @@ const BasicExamination = () => {
       );
     } finally {
       setIsUploadingAudio(false);
+    }
+  }
+
+  async function handleDeleteAudio(audio: UploadedMedicalRecordAudio) {
+    if (deletingAudioId || isUploadingAudio || analyzingAudioId) return;
+
+    setDeletingAudioId(audio.id);
+    try {
+      await deleteMedicalRecordAudio(audio);
+      setUploadedAudios((current) =>
+        current.filter((recording) => recording.id !== audio.id),
+      );
+      setAudioFile(null);
+      if (activeAIReview?.audioName === audio.name) {
+        setActiveAIReview(null);
+        setAIReviewDraft(null);
+      }
+      toast.success("Audio recording deleted.");
+    } catch (error) {
+      console.error("Unable to delete medical record audio:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete this audio recording right now.",
+      );
+    } finally {
+      setDeletingAudioId(null);
     }
   }
 
@@ -504,28 +537,26 @@ const BasicExamination = () => {
         analysisId: activeAIReview.analysis.id,
         status,
         edits,
-        medicalRecord: {
-          confirmedSymptoms: symptoms.length > 0 ? symptoms : null,
-          physicalExaminationNotes:
-            observations.length > 0 ? observations.join("\n") : null,
-          confirmedDiagnosis: diagnosis || null,
-          suggestedTreatment:
-            treatments.length > 0 ? treatments.join("\n") : null,
-        },
       });
 
       setActiveAIReview((current) =>
         current ? { ...current, analysis: updatedAnalysis } : current,
       );
-      setForm((current) => ({
-        ...current,
-        symptoms: symptoms.join(", "),
-        physicalExaminationNotes:
-          observations.length > 0 ? observations.join("\n") : "",
-        diagnosis,
-        treatment: treatments.join("\n"),
-      }));
-      toast.success("Reviewed suggestions applied to the medical record.");
+      if (status === "approved" || status === "modified") {
+        setForm((current) => ({
+          ...current,
+          symptoms: symptoms.join(", "),
+          physicalExaminationNotes:
+            observations.length > 0 ? observations.join("\n") : "",
+          diagnosis,
+          treatment: treatments.join("\n"),
+        }));
+        toast.success(
+          "Reviewed suggestions added to the examination draft. Database unchanged.",
+        );
+      } else {
+        toast.success("AI analysis rejected.");
+      }
     } catch (error) {
       console.error("Unable to save AI review:", error);
       toast.error(
@@ -829,11 +860,21 @@ const BasicExamination = () => {
                                     accept="audio/*"
                                     aria-label="Select audio file"
                                     className="sr-only"
-                                    disabled={isUploadingAudio}
+                                    disabled={
+                                      isUploadingAudio ||
+                                      uploadedAudios.length > 0 ||
+                                      isLoadingAudios
+                                    }
                                     onChange={(event) => {
                                       const file =
                                         event.currentTarget.files?.[0] ?? null;
                                       event.currentTarget.value = "";
+                                      if (uploadedAudios.length > 0) {
+                                        toast.error(
+                                          "Delete the existing audio recording before selecting another.",
+                                        );
+                                        return;
+                                      }
                                       if (file && !isSupportedAudioFile(file)) {
                                         toast.error("Choose a valid audio file.");
                                         setAudioFile(null);
@@ -845,13 +886,21 @@ const BasicExamination = () => {
                                     type="file"
                                   />
                                   <Button
-                                    disabled={isUploadingAudio}
+                                    disabled={
+                                      isUploadingAudio ||
+                                      uploadedAudios.length > 0 ||
+                                      isLoadingAudios
+                                    }
                                     onClick={() => audioInputRef.current?.click()}
                                     size="sm"
                                     type="button"
                                     variant="outline"
                                   >
-                                    {audioFile ? "Reselect" : "Browse"}
+                                    {uploadedAudios.length > 0
+                                      ? "Existing audio"
+                                      : audioFile
+                                        ? "Reselect"
+                                        : "Browse"}
                                   </Button>
                                   {audioFile ? (
                                     <Button
@@ -902,21 +951,41 @@ const BasicExamination = () => {
                                       <p className="min-w-0 truncate text-sm font-medium">
                                         {audio.name}
                                       </p>
-                                      <Button
-                                        disabled={
-                                          isLoadingAudios ||
-                                          analyzingAudioId !== null ||
-                                          isSavingAIReview
-                                        }
-                                        onClick={() => handleAnalyzeAudio(audio)}
-                                        size="sm"
-                                        type="button"
-                                      >
-                                        <Sparkles aria-hidden="true" />
-                                        {analyzingAudioId === audio.id
-                                          ? "Analyzing…"
-                                          : "Analyze"}
-                                      </Button>
+                                      <div className="flex shrink-0 items-center gap-1">
+                                        <Button
+                                          disabled={
+                                            isLoadingAudios ||
+                                            analyzingAudioId !== null ||
+                                            isSavingAIReview ||
+                                            deletingAudioId !== null
+                                          }
+                                          onClick={() => handleAnalyzeAudio(audio)}
+                                          size="sm"
+                                          type="button"
+                                        >
+                                          <Sparkles aria-hidden="true" />
+                                          {analyzingAudioId === audio.id
+                                            ? "Analyzing…"
+                                            : "Analyze"}
+                                        </Button>
+                                        <Button
+                                          aria-label={`Delete ${audio.name}`}
+                                          disabled={
+                                            deletingAudioId !== null ||
+                                            analyzingAudioId !== null ||
+                                            isUploadingAudio ||
+                                            isSavingAIReview
+                                          }
+                                          onClick={() => {
+                                            void handleDeleteAudio(audio);
+                                          }}
+                                          size="icon"
+                                          type="button"
+                                          variant="ghost"
+                                        >
+                                          <X aria-hidden="true" className="size-4" />
+                                        </Button>
+                                      </div>
                                     </div>
                                     <audio
                                       aria-label={`Play ${audio.name}`}
@@ -1060,13 +1129,20 @@ const BasicExamination = () => {
                             <DrawerFooter className="border-t bg-background p-4 sm:p-5">
                               <Button
                                 className="w-full"
-                                disabled={!audioFile || isUploadingAudio}
+                                disabled={
+                                  !audioFile ||
+                                  isUploadingAudio ||
+                                  uploadedAudios.length > 0 ||
+                                  isLoadingAudios
+                                }
                                 onClick={handleAudioUpload}
                                 type="button"
                               >
                                 {isUploadingAudio
                                   ? "Uploading…"
-                                  : "Upload audio"}
+                                  : uploadedAudios.length > 0
+                                    ? "Delete existing recording first"
+                                    : "Upload audio"}
                               </Button>
                             </DrawerFooter>
                           </DrawerContent>
@@ -1083,7 +1159,7 @@ const BasicExamination = () => {
                 <AccordionItem className="border-0" value="fecal-examination">
                   <div className="px-6 py-2">
                     <AccordionTrigger className="items-center p-0 text-lg font-semibold leading-none hover:no-underline">
-                      <span className="leading-normal">Fecal Examination</span>
+                      <span className="leading-normal">Fecal Examination (Optional)</span>
                     </AccordionTrigger>
                   </div>
                   <AccordionContent className="px-6">

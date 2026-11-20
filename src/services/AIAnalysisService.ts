@@ -47,13 +47,6 @@ export type AIAnalysisEdits = Partial<
   >
 >;
 
-export type ReviewedMedicalRecord = {
-  confirmedSymptoms: string[] | null;
-  physicalExaminationNotes: string | null;
-  confirmedDiagnosis: string | null;
-  suggestedTreatment: string | null;
-};
-
 const AI_ANALYSIS_COLUMNS =
   "id, transcription_id, medical_record_id, extracted_symptoms, extracted_observations, predicted_diagnosis, suggested_diagnostic_tests, suggested_treatment, additional_notes, llm_provider, llm_model, prompt_version, status, reviewed_by, reviewed_at, created_at";
 
@@ -96,12 +89,9 @@ export async function reviewAIAnalysis(
         analysisId: string;
         status: "approved" | "modified";
         edits?: AIAnalysisEdits;
-        medicalRecord: ReviewedMedicalRecord;
       },
 ): Promise<AIAnalysis> {
   const { analysisId, edits = {} } = input;
-  const medicalRecord =
-    input.status === "rejected" ? undefined : input.medicalRecord;
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
   if (!authData.user) throw new Error("Sign in to review this analysis.");
@@ -117,28 +107,6 @@ export async function reviewAIAnalysis(
     throw new Error("The AI analysis was not found or you do not have permission to review it.");
   }
 
-  if (medicalRecord) {
-    const { data: updatedRecord, error: medicalRecordError } = await supabase
-      .from("medical_records")
-      .update({
-        confirmed_symptoms: medicalRecord.confirmedSymptoms,
-        physical_examination_notes:
-          medicalRecord.physicalExaminationNotes?.trim() || null,
-        confirmed_diagnosis: medicalRecord.confirmedDiagnosis?.trim() || null,
-        suggested_treatment: medicalRecord.suggestedTreatment?.trim() || null,
-      })
-      .eq("id", analysisRecord.medical_record_id)
-      .select("id")
-      .maybeSingle();
-
-    if (medicalRecordError) throw medicalRecordError;
-    if (!updatedRecord) {
-      throw new Error(
-        "The medical record was not updated. Confirm that you have permission to edit it.",
-      );
-    }
-  }
-
   const { data, error } = await supabase
     .from("ai_analysis")
     .update({
@@ -152,11 +120,6 @@ export async function reviewAIAnalysis(
     .maybeSingle();
 
   if (error) {
-    if (medicalRecord) {
-      throw new Error(
-        `The medical record was updated, but the AI review metadata could not be saved: ${error.message}`,
-      );
-    }
     throw error;
   }
   if (!data) {
