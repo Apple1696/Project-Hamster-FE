@@ -3,7 +3,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import {
   ArrowLeft,
@@ -155,9 +154,7 @@ type AIReviewDraft = {
   additionalNotes: string;
 };
 
-type AssistantDrawerStyle = CSSProperties & {
-  "--drawer-content-width": string;
-};
+
 
 const BasicExamination = () => {
   const navigate = useNavigate();
@@ -177,7 +174,6 @@ const BasicExamination = () => {
   >([]);
   const [newFecalImages, setNewFecalImages] = useState<File[]>([]);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
-  const [isAiAssistantWide, setIsAiAssistantWide] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [uploadedAudios, setUploadedAudios] = useState<
     UploadedMedicalRecordAudio[]
@@ -205,12 +201,7 @@ const BasicExamination = () => {
       })),
     [newFecalImages],
   );
-  const assistantDrawerStyle: AssistantDrawerStyle = {
-    "--drawer-content-width": isAiAssistantWide
-      ? "min(54rem, 100vw)"
-      : "min(38rem, 100vw)",
-    height: "100dvh",
-  };
+ 
 
   useEffect(
     () => () => {
@@ -787,7 +778,6 @@ const BasicExamination = () => {
                           </Button>
                           <DrawerContent
                             className="gap-0 w-200 rounded-none border-l bg-background p-0 sm:rounded-l-2xl"
-                            style={assistantDrawerStyle}
                           >
                             <DrawerHeader className="border-b px-5 py-4 text-left">
                               <div className="flex items-start justify-between gap-4">
@@ -800,16 +790,6 @@ const BasicExamination = () => {
                                   </DrawerDescription>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1">
-                                  {/* <Button
-                                    onClick={() =>
-                                      setIsAiAssistantWide((current) => !current)
-                                    }
-                                    size="sm"
-                                    type="button"
-                                    variant="ghost"
-                                  >
-                                    {isAiAssistantWide ? "Narrow" : "Widen"}
-                                  </Button> */}
                                   <Button
                                     aria-label="Close AI assistant"
                                     className="size-8"
@@ -1098,7 +1078,7 @@ const BasicExamination = () => {
               </Accordion>
             </Card>
 
-            {/* <Card className="border-border/80 bg-card shadow-sm">
+            <Card className="border-border/80 bg-card shadow-sm">
               <Accordion>
                 <AccordionItem className="border-0" value="fecal-examination">
                   <div className="px-6 py-2">
@@ -1350,7 +1330,7 @@ const BasicExamination = () => {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-            </Card> */}
+            </Card>
 
             <div className="flex justify-end">
               <Button disabled={isSubmitting} type="submit" size="lg">
