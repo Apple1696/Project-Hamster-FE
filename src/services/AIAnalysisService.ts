@@ -22,6 +22,9 @@ export type AIAnalysis = {
   medical_record_id: string;
   extracted_symptoms: JsonValue | null;
   extracted_observations: JsonValue | null;
+  extracted_weight: number | null;
+  extracted_temperature: number | null;
+  extracted_heart_rate: number | null;
   predicted_diagnosis: JsonValue | null;
   suggested_diagnostic_tests: JsonValue | null;
   suggested_treatment: JsonValue | null;
@@ -40,6 +43,9 @@ export type AIAnalysisEdits = Partial<
     AIAnalysis,
     | "extracted_symptoms"
     | "extracted_observations"
+    | "extracted_weight"
+    | "extracted_temperature"
+    | "extracted_heart_rate"
     | "predicted_diagnosis"
     | "suggested_diagnostic_tests"
     | "suggested_treatment"
@@ -48,7 +54,7 @@ export type AIAnalysisEdits = Partial<
 >;
 
 const AI_ANALYSIS_COLUMNS =
-  "id, transcription_id, medical_record_id, extracted_symptoms, extracted_observations, predicted_diagnosis, suggested_diagnostic_tests, suggested_treatment, additional_notes, llm_provider, llm_model, prompt_version, status, reviewed_by, reviewed_at, created_at";
+  "id, transcription_id, medical_record_id, extracted_symptoms, extracted_observations, extracted_weight, extracted_temperature, extracted_heart_rate, predicted_diagnosis, suggested_diagnostic_tests, suggested_treatment, additional_notes, llm_provider, llm_model, prompt_version, status, reviewed_by, reviewed_at, created_at";
 
 export async function getAIAnalysisByTranscription(
   transcriptionId: string,
@@ -72,6 +78,21 @@ export async function getAIAnalysisById(
     .from("ai_analysis")
     .select(AI_ANALYSIS_COLUMNS)
     .eq("id", analysisId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as AIAnalysis | null;
+}
+
+export async function getLatestAIAnalysisByMedicalRecord(
+  medicalRecordId: string,
+): Promise<AIAnalysis | null> {
+  const { data, error } = await supabase
+    .from("ai_analysis")
+    .select(AI_ANALYSIS_COLUMNS)
+    .eq("medical_record_id", medicalRecordId)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
