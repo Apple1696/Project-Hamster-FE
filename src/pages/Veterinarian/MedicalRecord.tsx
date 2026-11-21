@@ -127,29 +127,72 @@ function getTriStateValue(value: boolean | null): string {
 }
 
 function jsonValueToEditorText(value: JsonValue | null): string {
-  if (value == null) return "";
+  if (value == null) return "Not enough info";
+  if (Array.isArray(value) && value.length === 0) return "Not enough info";
   if (Array.isArray(value)) {
-    return value
+    const text = value
       .map((item) =>
         typeof item === "string" ? item : JSON.stringify(item),
       )
       .join("\n");
+    return text.trim() || "Not enough info";
   }
-  if (typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
+  if (typeof value === "string") {
+    return value.trim() || "Not enough info";
+  }
+  const text = JSON.stringify(value, null, 2);
+  return text.trim() || "Not enough info";
 }
 
 function editorTextToList(value: string): string[] {
+  if (value.trim() === "Not enough info") return [];
   return value
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 }
 
+function extractedTextOrFallback(value: string | null): string {
+  return value?.trim() || "Not enough info";
+}
+
+function optionalExtractedText(value: string): string | null {
+  const text = value.trim();
+  return text && text !== "Not enough info" ? text : null;
+}
+
+function extractedTranscriptText(
+  correctedTranscript: string | null,
+  rawTranscript: string | null,
+): string {
+  return (
+    correctedTranscript?.trim() ||
+    rawTranscript?.trim() ||
+    "Not enough info"
+  );
+}
+
+function optionalNumberText(value: number | null): string {
+  return value == null ? "" : String(value);
+}
+
+function parseOptionalNumber(
+  value: string,
+  kind: "weight" | "temperature" | "heartRate",
+): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const parsed = kind === "heartRate" ? Number.parseInt(normalized, 10) : Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 type AIReviewDraft = {
   correctedTranscript: string;
   symptoms: string;
   observations: string;
+  weight: string;
+  temperature: string;
+  heartRate: string;
   diagnosis: string;
   diagnosticTests: string;
   treatment: string;
@@ -246,18 +289,21 @@ const BasicExamination = () => {
           analysis,
         });
         setAIReviewDraft({
-          correctedTranscript:
-            transcription.corrected_transcript ??
-            transcription.raw_transcript ??
-            "",
+          correctedTranscript: extractedTranscriptText(
+            transcription.corrected_transcript,
+            transcription.raw_transcript,
+          ),
           symptoms: jsonValueToEditorText(analysis.extracted_symptoms),
           observations: jsonValueToEditorText(analysis.extracted_observations),
+          weight: optionalNumberText(analysis.extracted_weight),
+          temperature: optionalNumberText(analysis.extracted_temperature),
+          heartRate: optionalNumberText(analysis.extracted_heart_rate),
           diagnosis: jsonValueToEditorText(analysis.predicted_diagnosis),
           diagnosticTests: jsonValueToEditorText(
             analysis.suggested_diagnostic_tests,
           ),
           treatment: jsonValueToEditorText(analysis.suggested_treatment),
-          additionalNotes: analysis.additional_notes ?? "",
+          additionalNotes: extractedTextOrFallback(analysis.additional_notes),
         });
       } catch (error) {
         console.error("Unable to restore AI analysis:", error);
@@ -454,14 +500,17 @@ const BasicExamination = () => {
           analysis: latestAnalysis,
         });
         setAIReviewDraft({
-          correctedTranscript:
-            transcription.corrected_transcript ??
-            transcription.raw_transcript ??
-            "",
+          correctedTranscript: extractedTranscriptText(
+            transcription.corrected_transcript,
+            transcription.raw_transcript,
+          ),
           symptoms: jsonValueToEditorText(latestAnalysis.extracted_symptoms),
           observations: jsonValueToEditorText(
             latestAnalysis.extracted_observations,
           ),
+          weight: optionalNumberText(latestAnalysis.extracted_weight),
+          temperature: optionalNumberText(latestAnalysis.extracted_temperature),
+          heartRate: optionalNumberText(latestAnalysis.extracted_heart_rate),
           diagnosis: jsonValueToEditorText(latestAnalysis.predicted_diagnosis),
           diagnosticTests: jsonValueToEditorText(
             latestAnalysis.suggested_diagnostic_tests,
@@ -469,7 +518,9 @@ const BasicExamination = () => {
           treatment: jsonValueToEditorText(
             latestAnalysis.suggested_treatment,
           ),
-          additionalNotes: latestAnalysis.additional_notes ?? "",
+          additionalNotes: extractedTextOrFallback(
+            latestAnalysis.additional_notes,
+          ),
         });
       } else if (requestId === audioLoadRequestRef.current) {
         setActiveAIReview(null);
@@ -586,18 +637,21 @@ const BasicExamination = () => {
         analysis,
       });
       setAIReviewDraft({
-        correctedTranscript:
-          transcription.corrected_transcript ??
-          transcription.raw_transcript ??
-          "",
+        correctedTranscript: extractedTranscriptText(
+          transcription.corrected_transcript,
+          transcription.raw_transcript,
+        ),
         symptoms: jsonValueToEditorText(analysis.extracted_symptoms),
         observations: jsonValueToEditorText(analysis.extracted_observations),
+        weight: optionalNumberText(analysis.extracted_weight),
+        temperature: optionalNumberText(analysis.extracted_temperature),
+        heartRate: optionalNumberText(analysis.extracted_heart_rate),
         diagnosis: jsonValueToEditorText(analysis.predicted_diagnosis),
         diagnosticTests: jsonValueToEditorText(
           analysis.suggested_diagnostic_tests,
         ),
         treatment: jsonValueToEditorText(analysis.suggested_treatment),
-        additionalNotes: analysis.additional_notes ?? "",
+        additionalNotes: extractedTextOrFallback(analysis.additional_notes),
       });
     } catch (error) {
       console.error("Unable to analyze medical audio:", error);
@@ -616,25 +670,42 @@ const BasicExamination = () => {
 
     setIsSavingAIReview(true);
     try {
-      await saveCorrectedTranscript(
-        activeAIReview.transcription.id,
+      const correctedTranscript = optionalExtractedText(
         aiReviewDraft.correctedTranscript,
       );
+      if (correctedTranscript) {
+        await saveCorrectedTranscript(
+          activeAIReview.transcription.id,
+          correctedTranscript,
+        );
+      }
 
       const symptoms = editorTextToList(aiReviewDraft.symptoms);
       const observations = editorTextToList(aiReviewDraft.observations);
       const diagnosis = editorTextToList(aiReviewDraft.diagnosis).join("\n");
       const treatments = editorTextToList(aiReviewDraft.treatment);
+      const weight = parseOptionalNumber(aiReviewDraft.weight, "weight");
+      const temperature = parseOptionalNumber(
+        aiReviewDraft.temperature,
+        "temperature",
+      );
+      const heartRate = parseOptionalNumber(
+        aiReviewDraft.heartRate,
+        "heartRate",
+      );
 
       const edits = {
         extracted_symptoms: symptoms,
         extracted_observations: observations,
+        extracted_weight: weight,
+        extracted_temperature: temperature,
+        extracted_heart_rate: heartRate,
         predicted_diagnosis: editorTextToList(aiReviewDraft.diagnosis),
         suggested_diagnostic_tests: editorTextToList(
           aiReviewDraft.diagnosticTests,
         ),
         suggested_treatment: treatments,
-        additional_notes: aiReviewDraft.additionalNotes.trim() || null,
+        additional_notes: optionalExtractedText(aiReviewDraft.additionalNotes),
       };
       const updatedAnalysis = await reviewAIAnalysis({
         analysisId: activeAIReview.analysis.id,
@@ -648,6 +719,9 @@ const BasicExamination = () => {
       if (status === "approved" || status === "modified") {
         setForm((current) => ({
           ...current,
+          weight: aiReviewDraft.weight.trim(),
+          temperature: aiReviewDraft.temperature.trim(),
+          heartRate: aiReviewDraft.heartRate.trim(),
           symptoms: symptoms.join(", "),
           physicalExaminationNotes:
             observations.length > 0 ? observations.join("\n") : "",
@@ -748,12 +822,12 @@ const BasicExamination = () => {
               Back
             </Button>
             <div>
-              {/* <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Examination
-              </p> */}
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Examination
-              </h1>
+              </p>
+              {/* <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                Basic Examination
+              </h1> */}
             </div>
           </div>
         </div>
@@ -803,7 +877,7 @@ const BasicExamination = () => {
                     id="weight"
                     name="weight"
                     onChange={(event) => updateField("weight", event.target.value)}
-                    placeholder="0"
+                    placeholder={form.weight ? "0" : "Not enough info"}
                     type="number"
                     value={form.weight}
                   />
@@ -814,7 +888,7 @@ const BasicExamination = () => {
                     id="temperature"
                     name="temperature"
                     onChange={(event) => updateField("temperature", event.target.value)}
-                    placeholder="37.0"
+                    placeholder={form.temperature ? "37.0" : "Not enough info"}
                     step="0.1"
                     type="number"
                     value={form.temperature}
@@ -826,7 +900,7 @@ const BasicExamination = () => {
                     id="heartRate"
                     name="heartRate"
                     onChange={(event) => updateField("heartRate", event.target.value)}
-                    placeholder="300"
+                    placeholder={form.heartRate ? "300" : "Not enough info"}
                     type="number"
                     value={form.heartRate}
                   />
@@ -1133,10 +1207,9 @@ const BasicExamination = () => {
                                       className="min-h-24"
                                       id="rawTranscript"
                                       readOnly
-                                      value={
-                                        activeAIReview.transcription.raw_transcript ??
-                                        ""
-                                      }
+                                      value={extractedTextOrFallback(
+                                      activeAIReview.transcription.raw_transcript,
+                                      )}
                                     />
                                   </div>
 
@@ -1160,6 +1233,41 @@ const BasicExamination = () => {
                                       }
                                       value={aiReviewDraft.correctedTranscript}
                                     />
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    {(
+                                      [
+                                        ["weight", "Weight (g)", "number", "0"],
+                                        ["temperature", "Temperature (°C)", "number", "37.0"],
+                                        ["heartRate", "Heart rate (bpm)", "number", "300"],
+                                      ] as const
+                                    ).map(([key, label, type, placeholder]) => (
+                                      <div className="space-y-2" key={key}>
+                                        <Label htmlFor={`ai-${key}`}>{label}</Label>
+                                        <Input
+                                          id={`ai-${key}`}
+                                          onChange={(event) =>
+                                            setAIReviewDraft((current) =>
+                                              current
+                                                ? {
+                                                  ...current,
+                                                  [key]: event.target.value,
+                                                }
+                                                : current,
+                                            )
+                                          }
+                                          placeholder={
+                                            aiReviewDraft[key]
+                                              ? placeholder
+                                              : "Not enough info"
+                                          }
+                                          step={key === "temperature" ? "0.1" : "1"}
+                                          type={type}
+                                          value={aiReviewDraft[key]}
+                                        />
+                                      </div>
+                                    ))}
                                   </div>
 
                                   <div className="grid gap-3 sm:grid-cols-2">
