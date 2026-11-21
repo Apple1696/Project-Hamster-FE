@@ -729,7 +729,7 @@ const BasicExamination = () => {
           treatment: treatments.join("\n"),
         }));
         toast.success(
-          "Reviewed suggestions added to the examination draft. Database unchanged.",
+          "Reviewed suggestions added to the examination draft.",
         );
       } else {
         toast.success("AI analysis rejected.");
