@@ -49,7 +49,7 @@ const defaultProps: Hero1Props = {
     secondary: { text: "Learn more", url: "#" },
   },
   image: {
-    src: "public/images/Hamster.jpg",
+    src: "/images/Hamster.jpg",
     alt: "Hamster Image",
     
   },
@@ -92,19 +92,19 @@ const Hero1 = (props: Props) => {
               <img
                 src={image.src}
                 alt={image.alt}
-                className="aspect-video w-full rounded-md border border-border object-cover object-top dark:hidden"
+                className="aspect-video w-full rounded-md border border-border object-cover object-center dark:hidden"
               />
               <img
                 src={image.srcDark}
                 alt={image.alt}
-                className="hidden aspect-video w-full rounded-md border border-border object-cover object-top dark:block"
+                className="hidden aspect-video w-full rounded-md border border-border object-cover object-center dark:block"
               />
             </>
           ) : (
             <img
               src={image.src}
               alt={image.alt}
-              className="aspect-video w-full rounded-md border border-border object-cover object-top"
+              className="aspect-video w-full rounded-md border border-border object-cover object-center"
             />
           )}
         </div>
